@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.db.database import get_db
-from app.crud.slipper import (
+from app.crud.stepup import (
     get_category, get_categories, create_category, update_category, delete_category
 )
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryInDB

@@ -14,22 +14,22 @@ sys.path.append(str(Path(__file__).parent))
 from app.db.database import init_db, AsyncSessionLocal
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.user import create_user, promote_to_admin
-from app.crud.slipper import create_category, create_slipper
+from app.crud.stepup import create_category, create_slipper
 from app.schemas.user import UserCreate
 from app.schemas.category import CategoryCreate
-from app.schemas.slipper import SlipperCreate
+from app.schemas.stepup import StepUpCreate
 
 # Sample data
 SAMPLE_CATEGORIES = [
-    {"name": "Men", "description": "Men's slippers"},
-    {"name": "Women", "description": "Women's slippers"},
-    {"name": "Kids", "description": "Children's slippers"},
+    {"name": "Men", "description": "Men's stepups"},
+    {"name": "Women", "description": "Women's stepups"},
+    {"name": "Kids", "description": "Children's stepups"},
 ]
 
 SAMPLE_SLIPPERS = [
-    {"image": "https://example.com/slippers/men1.jpg", "name": "Men Classic Slipper", "size": "42", "price": 19.99, "quantity": 25, "category_name": "Men"},
-    {"image": "https://example.com/slippers/women1.jpg", "name": "Women Cozy Slipper", "size": "38", "price": 21.99, "quantity": 30, "category_name": "Women"},
-    {"image": "https://example.com/slippers/kids1.jpg", "name": "Kids Fun Slipper", "size": "30", "price": 14.99, "quantity": 40, "category_name": "Kids"},
+    {"image": "https://example.com/stepups/men1.jpg", "name": "Men Classic StepUp", "size": "42", "price": 19.99, "quantity": 25, "category_name": "Men"},
+    {"image": "https://example.com/stepups/women1.jpg", "name": "Women Cozy StepUp", "size": "38", "price": 21.99, "quantity": 30, "category_name": "Women"},
+    {"image": "https://example.com/stepups/kids1.jpg", "name": "Kids Fun StepUp", "size": "30", "price": 14.99, "quantity": 40, "category_name": "Kids"},
 ]
 
 async def create_sample_categories(db: AsyncSession):
@@ -55,9 +55,9 @@ async def create_sample_slippers(db: AsyncSession, categories):
         
         if category:
             slip_data["category_id"] = category.id
-            slipper_obj = SlipperCreate(**slip_data)
-            db_slipper = await create_slipper(db, slipper_obj.model_dump())
-            print(f"  ✅ Created slipper: {db_slipper.name} (${db_slipper.price}) size {db_slipper.size}")
+            stepup_obj = StepUpCreate(**slip_data)
+            db_slipper = await create_slipper(db, stepup_obj.model_dump())
+            print(f"  ✅ Created stepup: {db_slipper.name} (${db_slipper.price}) size {db_slipper.size}")
         else:
             print(f"  ⚠️  Category '{category_name}' not found for slipper: {slip_data['name']}")
 
@@ -102,7 +102,7 @@ async def create_admin_user(db: AsyncSession):
 
 async def main():
     """Main initialization function"""
-    print("🚀 Initializing Slippers Order System...")
+    print("🚀 Initializing StepUp Order System...")
     print("=" * 50)
     
     try:
@@ -115,24 +115,24 @@ async def main():
         async with AsyncSessionLocal() as db:
             # Create categories
             categories = await create_sample_categories(db)
-            
-            # Create slippers
+
+            # Create stepups
             await create_sample_slippers(db, categories)
-            
+
             # Create admin user
             admin_user = await create_admin_user(db)
-        
+
         print("\n" + "=" * 50)
         print("✅ System initialization completed successfully!")
         print("\n📋 Summary:")
-        print(f"  • Database: slippers.db")
+        print(f"  • Database: stepup.db")
         print(f"  • Categories: {len(categories)}")
-        print(f"  • Slippers: {len(SAMPLE_SLIPPERS)}")
+        print(f"  • StepUps: {len(SAMPLE_SLIPPERS)}")
         if admin_user:
             print(f"  • Admin user: {admin_user.name} {admin_user.surname}")
         else:
             print(f"  • Admin user: Not created")
-        
+
         print("\n🔧 Next steps:")
         print("  1. Start the FastAPI server: python -m uvicorn app.main:app --reload")
         print("  2. Access the API documentation: http://localhost:8000/docs")

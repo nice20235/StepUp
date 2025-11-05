@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy import func, and_
 from app.models.order import Order, OrderItem, OrderStatus
-from app.models.slipper import Slipper
+from app.models.stepup import StepUp
 from app.schemas.order import OrderCreate, OrderUpdate, OrderItemCreate
 from typing import Optional, List, Tuple
 import logging
@@ -182,9 +182,9 @@ async def create_order(
         new_items_total = 0.0
         # For each incoming item, merge into existing or create new
         for item_data in order.items:
-            slipper = (await db.execute(select(Slipper).where(Slipper.id == item_data.slipper_id))).scalar_one_or_none()
+            slipper = (await db.execute(select(StepUp).where(StepUp.id == item_data.slipper_id))).scalar_one_or_none()
             if not slipper:
-                raise ValueError(f"Slipper with ID {item_data.slipper_id} not found")
+                raise ValueError(f"StepUp with ID {item_data.slipper_id} not found")
             unit_price = slipper.price
             if item_data.slipper_id in existing_by_slipper:
                 existing_item = existing_by_slipper[item_data.slipper_id]
@@ -233,11 +233,11 @@ async def create_order(
     order_items = []
     
     for item_data in order.items:
-        # Get slipper to verify it exists and get current price
-        slipper_result = await db.execute(select(Slipper).where(Slipper.id == item_data.slipper_id))
+        # Get stepup to verify it exists and get current price
+        slipper_result = await db.execute(select(StepUp).where(StepUp.id == item_data.slipper_id))
         slipper = slipper_result.scalar_one_or_none()
         if not slipper:
-            raise ValueError(f"Slipper with ID {item_data.slipper_id} not found")
+            raise ValueError(f"StepUp with ID {item_data.slipper_id} not found")
         # Clamp unrealistic quantities to prevent client mistakes (e.g., using inventory qty)
         from app.core.config import settings
         qty = int(item_data.quantity)

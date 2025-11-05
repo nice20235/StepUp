@@ -181,8 +181,8 @@ pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
 
-slippers.db
-slippers.db-journal
+stepup.db
+stepup.db-journal
 *.sqlite
 *.sqlite-journal
 

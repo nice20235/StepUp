@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from app.models.cart import Cart, CartItem
-from app.models.slipper import Slipper
+from app.models.stepup import StepUp
 from app.schemas.cart import CartItemCreate, CartItemUpdate
 from typing import Optional
 import logging
@@ -46,10 +46,10 @@ async def get_cart(db: AsyncSession, user_id: int) -> Optional[Cart]:
 
 async def add_item(db: AsyncSession, user_id: int, item: CartItemCreate) -> Cart:
     cart = await get_or_create_cart(db, user_id)
-    # Ensure slipper exists
-    slipper = (await db.execute(select(Slipper).where(Slipper.id == item.slipper_id))).scalar_one_or_none()
+    # Ensure stepup exists
+    slipper = (await db.execute(select(StepUp).where(StepUp.id == item.slipper_id))).scalar_one_or_none()
     if not slipper:
-        raise ValueError("Slipper not found")
+        raise ValueError("StepUp not found")
     # Merge or add
     for ci in cart.items:
         if ci.slipper_id == item.slipper_id:
@@ -108,9 +108,9 @@ async def get_cart_totals(db: AsyncSession, user_id: int) -> tuple[int, int, flo
         select(
             func.count(CartItem.id),
             func.coalesce(func.sum(CartItem.quantity), 0),
-            func.coalesce(func.sum((Slipper.price * CartItem.quantity)), 0.0),
+            func.coalesce(func.sum((StepUp.price * CartItem.quantity)), 0.0),
         )
-        .join(Slipper, Slipper.id == CartItem.slipper_id)
+        .join(StepUp, StepUp.id == CartItem.slipper_id)
         .where(CartItem.cart_id == cart_id)
     )
     res = await db.execute(q)

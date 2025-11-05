@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.middleware import PerformanceMiddleware, CompressionHeaderMiddleware, SecurityHeadersMiddleware
 from app.core.cache import cache
 from app.db.database import init_db, close_db
-from app.api.endpoints import users, slippers, orders, categories
+from app.api.endpoints import users, stepups, orders, categories
 from app.api.endpoints import cart as cart_router
 from app.api.endpoints import octo as octo_payments
 from app.auth.routes import auth_router
@@ -37,7 +37,7 @@ START_TIME = time.time()
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown with optimizations"""
     # Startup
-    logger.info("🚀 Starting Slippers Order System...")
+    logger.info("🚀 Starting StepUp Order System...")
     
     try:
         # Initialize database
@@ -78,9 +78,9 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI application with optimizations
 app = FastAPI(
-    title="Slippers Order System API",
+    title="StepUp Order System API",
     description="""
-    A high-performance slippers ordering system with comprehensive features.
+    A high-performance StepUp ordering system with comprehensive features.
     
     ## 🔐 Authentication
     
@@ -95,7 +95,7 @@ app = FastAPI(
     * **JWT-based authentication** with HttpOnly cookies
     * **Role-based access control** (User/Admin)
     * **Rate limiting** and security headers
-    * **Comprehensive slipper management** with multiple images
+    * **Comprehensive StepUp management** with multiple images
     * **Order tracking system** with status updates
     * **Pagination and filtering** on all list endpoints
     * **Caching system** for improved performance
@@ -114,7 +114,7 @@ app = FastAPI(
     
     * `/auth/*` - Authentication endpoints
     * `/users/*` - User management (admin)
-    * `/slippers/*` - Slipper catalog and images
+    * `/stepups/*` - StepUp catalog and images
     * `/orders/*` - Order management
     * `/categories/*` - Product categories
     """,
@@ -124,7 +124,7 @@ app = FastAPI(
     openapi_tags=[
         {"name": "Authentication", "description": "User authentication and authorization"},
         {"name": "Users", "description": "User management (admin only)"},
-        {"name": "Slippers", "description": "Slipper catalog and image management"},
+    {"name": "StepUps", "description": "StepUp catalog and image management"},
         {"name": "Orders", "description": "Order processing and tracking"},
         {"name": "Categories", "description": "Product category management"},
     # System diagnostics removed for simplification; keep /health only
@@ -247,7 +247,7 @@ async def global_exception_handler(request, exc):
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(categories.router, prefix="/categories", tags=["Categories"])
-app.include_router(slippers.router, prefix="/slippers", tags=["Slippers"])
+app.include_router(stepups.router, prefix="/stepups", tags=["StepUps"])
 app.include_router(orders.router, prefix="/orders", tags=["Orders"])
 app.include_router(octo_payments.router, prefix="/payments/octo", tags=["Payments (OCTO)"])
 # Cart router already defines its tag; avoid re-specifying to prevent duplicates
@@ -263,7 +263,7 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 async def root():
     """Root endpoint with welcome message and basic API info"""
     return {
-        "message": "🥿 Slippers Order System API",
+    "message": "🥿 StepUp Order System API",
         "version": "2.0.0",
         "docs": "/docs",
         "status": "operational"

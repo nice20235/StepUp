@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 logger = logging.getLogger(__name__)
 
 # Database URL - use SQLite for development, can be changed to PostgreSQL for production
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./slippers.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./stepup.db")
 
 # Create async engine with optimized settings
 if "sqlite" in DATABASE_URL:
@@ -35,7 +35,10 @@ if "sqlite" in DATABASE_URL:
         try:
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON;")
-            cursor.execute("PRAGMA journal_mode=WAL;")
+            # Use DELETE journaling to avoid creating -wal and -shm files.
+            # WAL is better for concurrency, but DELETE mode keeps a single
+            # .db file which is desired in some dev environments.
+            cursor.execute("PRAGMA journal_mode=DELETE;")
             cursor.close()
         except Exception:
             # Best-effort; continue even if PRAGMAs can't be set
@@ -99,7 +102,7 @@ async def init_db():
     async with engine.begin() as conn:
         # Import all models to ensure they're registered
         from app.models.user import User  # noqa: F401
-        from app.models.slipper import Slipper, Category, SlipperImage  # noqa: F401
+        from app.models.stepup import StepUp, Category, StepUpImage  # noqa: F401
         from app.models.order import Order, OrderItem  # noqa: F401
         from app.models.cart import Cart, CartItem  # noqa: F401
         from app.models.payment import Payment  # noqa: F401

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.user import User
-    from app.models.slipper import Slipper
+    from app.models.stepup import StepUp
 
 class Cart(Base):
     __tablename__ = "carts"
@@ -34,7 +34,7 @@ class CartItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     cart: Mapped[Cart] = relationship("Cart", back_populates="items")
-    slipper: Mapped["Slipper"] = relationship("Slipper")
+    slipper: Mapped["StepUp"] = relationship("StepUp")
 
     __table_args__ = (
         Index("idx_cart_items_cart", "cart_id"),

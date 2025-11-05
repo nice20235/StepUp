@@ -19,7 +19,7 @@ from app.crud.order import (
 )
 from app.models.payment import PaymentStatus
 from app.models.order import OrderItem
-from app.models.slipper import Slipper
+from app.models.stepup import StepUp
 from app.core.timezone import to_tashkent, format_tashkent_compact
 from app.auth.dependencies import get_current_user, get_current_admin
 import logging
@@ -82,8 +82,8 @@ async def create_order_endpoint(
     # IMPORTANT: Avoid accessing new_order.items directly (may trigger async lazy-load)
     # Fetch items explicitly to prevent MissingGreenlet
     items_result = await db.execute(
-        select(OrderItem, Slipper)
-        .join(Slipper, Slipper.id == OrderItem.slipper_id)
+        select(OrderItem, StepUp)
+        .join(StepUp, StepUp.id == OrderItem.slipper_id)
         .where(OrderItem.order_id == new_order.id)
         .order_by(OrderItem.id.asc())
     )
@@ -172,8 +172,8 @@ async def create_order_from_cart(
     created_compact = format_tashkent_compact(new_order.created_at)
     # Explicitly fetch items for response
     items_result = await db.execute(
-        select(OrderItem, Slipper)
-        .join(Slipper, Slipper.id == OrderItem.slipper_id)
+        select(OrderItem, StepUp)
+        .join(StepUp, StepUp.id == OrderItem.slipper_id)
         .where(OrderItem.order_id == new_order.id)
         .order_by(OrderItem.id.asc())
     )
@@ -241,8 +241,8 @@ async def list_orders(
             items_by_order: dict[int, list[dict]] = {}
             if order_ids:
                 data = await db.execute(
-                    select(OrderItem, Slipper)
-                    .join(Slipper, Slipper.id == OrderItem.slipper_id)
+                    select(OrderItem, StepUp)
+                    .join(StepUp, StepUp.id == OrderItem.slipper_id)
                     .where(OrderItem.order_id.in_(order_ids))
                     .order_by(OrderItem.id.asc())
                 )
@@ -299,8 +299,8 @@ async def list_orders(
             items_by_order: dict[int, list[dict]] = {}
             if order_ids:
                 data = await db.execute(
-                    select(OrderItem, Slipper)
-                    .join(Slipper, Slipper.id == OrderItem.slipper_id)
+                    select(OrderItem, StepUp)
+                    .join(StepUp, StepUp.id == OrderItem.slipper_id)
                     .where(OrderItem.order_id.in_(order_ids))
                 )
                 for oi, sl in data.all():
@@ -351,8 +351,8 @@ async def get_order_endpoint(
         
         # Fetch items explicitly to avoid any lazy-load issues and ensure correctness
         items_data = await db.execute(
-            select(OrderItem, Slipper)
-            .join(Slipper, Slipper.id == OrderItem.slipper_id)
+            select(OrderItem, StepUp)
+            .join(StepUp, StepUp.id == OrderItem.slipper_id)
             .where(OrderItem.order_id == db_order.id)
             .order_by(OrderItem.id.asc())
         )
@@ -416,8 +416,8 @@ async def update_order_endpoint(order_id: int, order_update: OrderUpdate, db: As
 
     # Explicitly reload items for this order to avoid any async lazy-load pitfalls
     items_data = await db.execute(
-        select(OrderItem, Slipper)
-        .join(Slipper, Slipper.id == OrderItem.slipper_id)
+        select(OrderItem, StepUp)
+        .join(StepUp, StepUp.id == OrderItem.slipper_id)
         .where(OrderItem.order_id == updated_order.id)
         .order_by(OrderItem.id.asc())
     )

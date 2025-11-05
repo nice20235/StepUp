@@ -1,12 +1,12 @@
-# Slippers API
+# StepUp API
 
-FastAPI-based slippers ordering & payment system with user authentication, catalog, orders, and OCTO payment integration.
+FastAPI-based stepup ordering & payment system with user authentication, catalog, orders, and OCTO payment integration.
 
 ## Features
 
 - **Authentication**: JWT (access + refresh) in HttpOnly cookies
 - **Role-Based Access**: Admin vs user protected endpoints
-- **Slipper Catalog**: CRUD + pagination, search, sorting, category filter, multi-image upload
+- **StepUp Catalog**: CRUD + pagination, search, sorting, category filter, multi-image upload
 - **Categories**: CRUD & caching
 - **Orders**: Creation with multiple items, status transitions, finance filter (only paid/refunded)
 - **Payments (OCTO)**: One‑stage auto-capture prepare_payment, webhook (notify) handling, refunds
@@ -31,11 +31,10 @@ FastAPI-based slippers ordering & payment system with user authentication, catal
 2. **Environment Configuration** – create a `.env` file in project root:
   ```env
   # --- Core ---
-  DATABASE_URL=sqlite+aiosqlite:///./slippers.db
+  DATABASE_URL=sqlite+aiosqlite:///./stepup.db
   # For production switch to PostgreSQL:
-  # DATABASE_URL=postgresql+asyncpg://user:password@localhost/slippers
+  # DATABASE_URL=postgresql+asyncpg://user:password@localhost/stepup
   SECRET_KEY=change_me_strong_secret
-  ALGORITHM=HS256
   ACCESS_TOKEN_EXPIRE_MINUTES=15
   REFRESH_TOKEN_EXPIRE_DAYS=7
   ALLOWED_ORIGINS=http://localhost:3000,https://your-frontend.domain
@@ -96,14 +95,14 @@ FastAPI-based slippers ordering & payment system with user authentication, catal
 - `GET /slippers/{id}` - Retrieve slipper (optional images)
 - `POST /slippers/` - Create slipper (no image)
 - `PUT /slippers/{id}` - Update slipper
-- `DELETE /slippers/{id}` - Delete slipper
-- `POST /slippers/{id}/upload-images` - Upload up to 10 images
-- `GET /slippers/{id}/images` - List images
-- `DELETE /slippers/{id}/images/{image_id}` - Delete image
-
-### Orders
-- `GET /orders/` - List orders (user restricted; admin sees all)
-- `GET /orders/?finance=paid_refunded` - Finance view (only orders whose latest payment is PAID or REFUNDED)
+- `GET /stepups/` - List stepups (pagination, search, sort, category filter)
+- `GET /stepups/{id}` - Retrieve stepup (optional images)
+- `POST /stepups/` - Create stepup (no image)
+- `PUT /stepups/{id}` - Update stepup
+- `DELETE /stepups/{id}` - Delete stepup
+- `POST /stepups/{id}/upload-images` - Upload up to 10 images
+- `GET /stepups/{id}/images` - List images
+- `DELETE /stepups/{id}/images/{image_id}` - Delete image
 - `POST /orders/` - Create order with items
 - `PUT /orders/{order_id}` - Update order
 - `DELETE /orders/{order_id}` - Delete order
@@ -131,12 +130,11 @@ curl -X POST "http://localhost:8000/auth/login" \
   -d '{"username": "john_doe", "password": "password123"}'
 ```
 
-### Create slipper (Admin only)
+### Create stepup (Admin only)
 ```bash
-curl -X POST "http://localhost:8000/slippers/" \
+curl -X POST "http://localhost:8000/stepups/" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Cozy Home Slipper", "size": "42", "price": 19.99, "quantity": 10, "category_id": 1}'
 ```
 
 ### Create order
@@ -171,10 +169,8 @@ curl -X POST "http://localhost:8000/payments/octo/refund" \
 
 - **User**: name, surname, phone_number, hashed_password, is_admin, created_at
 - **Category**: name, description, is_active
-- **Slipper**: name, size, price, quantity, category_id, image, timestamps
-- **SlipperImage**: slipper_id, path, order_index, flags
-- **Order**: order_id, user_id, status, total_amount + items
-- **OrderItem**: order_id, slipper_id, quantity, unit_price
+  - **StepUp**: name, size, price, quantity, category_id, image, timestamps
+  - **StepUpImage**: slipper_id, path, order_index, flags
 - **Payment**: order_id, amount, status (CREATED,PENDING,PAID,FAILED,CANCELLED,REFUNDED), external refs
 
 ## Security & Performance

@@ -1,1 +1,1 @@
-from . import users, orders, categories, slippers
+from . import users, orders, categories, stepups

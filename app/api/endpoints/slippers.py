@@ -1,80 +1,33 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
-import os
-from uuid import uuid4
-import logging
-from app.db.database import get_db
-from app.auth.dependencies import get_current_admin
-from app.core.cache import cached
-from app.crud.slipper import (
-	get_slipper,
-	get_slippers,
-	update_slipper,
-	delete_slipper,
-	get_category,
-)
+"""Compatibility shim for legacy `slippers` endpoint module path.
 
+This module re-exports the canonical router from
+`app.api.endpoints.stepups` so existing imports targeting
+`app.api.endpoints.slippers` continue to work during the rename.
+"""
 
-# Set up logging
-logger = logging.getLogger(__name__)
+from app.api.endpoints.stepups import router  # canonical stepups router
+__all__ = ["router"]
+"""Compatibility shim for legacy `slippers` endpoint module path.
 
+This module re-exports the canonical router from
+`app.api.endpoints.stepups` so existing imports targeting
+`app.api.endpoints.slippers` continue to work during the rename.
+"""
 
-router = APIRouter()
+from app.api.endpoints.stepups import router  # canonical stepups router
 
+# Export the router symbol so `from app.api.endpoints.slippers import router`
+# continues to work for callers. Keep this file minimal and dependency-free.
+__all__ = ["router"]
 
-@router.get("/")
-@cached(ttl=300, key_prefix="slippers")
-async def read_slippers(
-	skip: int = Query(0, ge=0, description="Skip items for pagination"),
-	limit: int = Query(20, ge=1, le=100, description="Limit items per page"),
-	category_id: Optional[int] = Query(None, description="Filter by category ID"),
-	search: Optional[str] = Query(None, description="Search in name and size"),
-	sort: str = Query(
-		"id_desc",
-		description="Sort order: id_asc,id_desc,name_asc,name_desc,price_asc,price_desc,created_asc,created_desc",
-	),
-	db: AsyncSession = Depends(get_db),
-):
-	"""Get all slippers with filtering, pagination, search and sorting."""
-	try:
-		slippers, total = await get_slippers(
-			db,
-			skip=skip,
-			limit=limit,
-			category_id=category_id,
-			search=search,
-			sort=sort,
-		)
+from app.api.endpoints.stepups import router  # canonical stepups router
 
-		items = [
-			{
-				"id": s.id,
-				"name": s.name,
-				"size": s.size,
-				"price": s.price,
-				"quantity": s.quantity,
-				"category_id": s.category_id,
-				"category_name": s.category.name if s.category else None,
-				"image": s.image,
-				"is_available": s.quantity > 0,
-			}
-			for s in slippers
-		]
+# Backwards-compatible shim: re-export the canonical `stepups` router from
+# the legacy module path `app.api.endpoints.slippers` so older imports keep working.
+from app.api.endpoints.stepups import router  # canonical stepups router
 
-		return {
-			"items": items,
-			"total": total,
-			"page": (skip // limit) + 1,
-			"pages": (total + limit - 1) // limit,
-			"has_next": skip + limit < total,
-			"has_prev": skip > 0,
-			"sort": sort,
-		}
-	except Exception as e:
-		logger.error(f"Error fetching slippers: {e}")
-		raise HTTPException(status_code=500, detail="Error fetching slippers")
-
+# Backwards-compatible shim: re-export the canonical `stepups` router from
+# the legacy module path `app.api.endpoints.slippers` so older imports keep working.
 
 @router.get("/{slipper_id}")
 @cached(ttl=600, key_prefix="slipper")
@@ -381,6 +334,9 @@ async def delete_slipper_image(
 	await invalidate_cache_pattern("slippers:")
 	await invalidate_cache_pattern(f"slipper:{slipper_id}:")
 
-	return {"message": "Image deleted successfully", "deleted_image_id": image_id}
+from app.api.endpoints.stepups import router  # canonical stepups router
+
+# This module intentionally re-exports the `stepups` router under the legacy
+# module path `app.api.endpoints.slippers` so older imports continue to work.
 
 

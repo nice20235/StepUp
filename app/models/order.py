@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.user import User
-    from app.models.slipper import Slipper
+    from app.models.stepup import StepUp
 
 class OrderStatus(str, enum.Enum):
     """Supported order statuses (simplified per requirement):
@@ -109,7 +109,7 @@ class OrderItem(Base):
     
     # Relationships
     order: Mapped[Order] = relationship("Order", back_populates="items")
-    slipper: Mapped["Slipper"] = relationship("Slipper")
+    slipper: Mapped["StepUp"] = relationship("StepUp")
     
     # Indexes for better query performance
     __table_args__ = (
