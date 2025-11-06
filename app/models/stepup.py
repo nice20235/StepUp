@@ -38,7 +38,7 @@ class StepUp(Base):
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    image: Mapped[str] = mapped_column(String(255), nullable=False)
+    image: Mapped[str] = mapped_column(String(255), nullable=True)
     size: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     price: Mapped[float] = mapped_column(Float, nullable=False, index=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
