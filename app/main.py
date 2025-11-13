@@ -160,11 +160,15 @@ cors_kwargs = dict(
 # Allow both explicit origins and regex simultaneously.
 # This ensures localhost works in development even when a production regex is configured.
 cors_kwargs["allow_origins"] = allowed
-if getattr(settings, "ALLOWED_ORIGIN_REGEX", None):
-    cors_kwargs["allow_origin_regex"] = settings.ALLOWED_ORIGIN_REGEX
+origin_regex = getattr(settings, "ALLOWED_ORIGIN_REGEX", None)
+# In DEBUG, be permissive to avoid accidental CORS blocks during development or staging
+if settings.DEBUG and not origin_regex:
+    origin_regex = r".*"
+if origin_regex:
+    cors_kwargs["allow_origin_regex"] = origin_regex
 
 # Startup log for visibility
-print(f"[CORS] allowed_origins={allowed} regex={getattr(settings, 'ALLOWED_ORIGIN_REGEX', None)}")
+print(f"[CORS] allowed_origins={allowed} regex={origin_regex}")
 
 # Performance middleware
 app.add_middleware(PerformanceMiddleware)
