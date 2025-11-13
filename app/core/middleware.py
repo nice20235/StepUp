@@ -6,6 +6,7 @@ import logging
 from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # HSTS for HTTPS in non-debug environments
+        if not settings.DEBUG:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
 
         # Do NOT set CSP on interactive docs/static assets to avoid blocking Swagger UI
         path = request.url.path

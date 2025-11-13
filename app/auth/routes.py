@@ -18,6 +18,7 @@ auth_router = APIRouter()
 
 # In-memory rate limit storage: key -> deque[timestamps]
 _login_attempts = defaultdict(deque)
+_register_attempts = defaultdict(deque)
 
 def _rate_limit_key(name: str, client_ip: str) -> str:
     return f"{client_ip}:{name}" if name else client_ip
@@ -37,12 +38,31 @@ def check_login_rate_limit(name: str, client_ip: str):
     dq.append(now)
 
 
+def check_register_rate_limit(client_ip: str):
+    now = time.time()
+    window = settings.REGISTER_RATE_WINDOW_SEC
+    limit = settings.REGISTER_RATE_LIMIT
+    key = client_ip or "unknown"
+    dq = _register_attempts[key]
+    # drop old
+    while dq and now - dq[0] > window:
+        dq.popleft()
+    if len(dq) >= limit:
+        raise HTTPException(status_code=429, detail="Too many registration attempts. Please try again later.")
+    # record attempt
+    dq.append(now)
+
+
 @auth_router.post("/register")
 async def register_user(
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db),
-    response: Response = None
+    response: Response = None,
+    request: Request | None = None,
 ):
+    # Basic IP-based rate limit for registration to reduce abuse
+    client_ip = request.client.host if request and request.client else "unknown"
+    check_register_rate_limit(client_ip)
     # Check if user with same name already exists
     existing_user_by_name = await get_user_by_name(db, user_data.name)
     if existing_user_by_name:

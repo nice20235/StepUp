@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     ALLOWED_ORIGIN_REGEX: str | None = r"^https?://(.+\.)?optomoyoqkiyim\.uz$"
     LOGIN_RATE_LIMIT: int = 5  # попыток
     LOGIN_RATE_WINDOW_SEC: int = 300  # окно в секундах (5 минут)
+    # Registration rate limits to mitigate automated abuse
+    REGISTER_RATE_LIMIT: int = 5
+    REGISTER_RATE_WINDOW_SEC: int = 300
     COOKIE_SAMESITE: str = "lax"  # options: 'lax', 'strict', 'none'
     COOKIE_SECURE: bool = True
     COOKIE_DOMAIN: str | None = None
