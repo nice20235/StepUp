@@ -18,7 +18,8 @@ class Settings(BaseSettings):
         "http://localhost:5173,"
         "https://oyoqkiyim.duckdns.org,"
         "https://optomoyoqkiyim.uz,"
-        "https://www.optomoyoqkiyim.uz"
+        "https://www.optomoyoqkiyim.uz,"
+        "https://step-up-7.vercel.app"
     )
     # Allow any subdomain on production domain by default (www, ru., uz., etc.)
     ALLOWED_ORIGIN_REGEX: str | None = r"^https?://(.+\.)?optomoyoqkiyim\.uz$"
