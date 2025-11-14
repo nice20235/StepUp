@@ -50,14 +50,27 @@ async def add_item(db: AsyncSession, user_id: int, item: CartItemCreate) -> Cart
     slipper = (await db.execute(select(StepUp).where(StepUp.id == item.slipper_id))).scalar_one_or_none()
     if not slipper:
         raise ValueError("StepUp not found")
-    # Merge or add
+    # Merge or add with stock check
+    existing_qty = 0
     for ci in cart.items:
         if ci.slipper_id == item.slipper_id:
-            ci.quantity += item.quantity
+            existing_qty = ci.quantity
+            new_qty = existing_qty + int(item.quantity)
+            if new_qty > (slipper.quantity or 0):
+                raise ValueError(
+                    f"Requested quantity exceeds available stock (requested={new_qty}, available={slipper.quantity})"
+                )
+            ci.quantity = new_qty
             db.add(ci)
             break
     else:
-        db.add(CartItem(cart_id=cart.id, slipper_id=item.slipper_id, quantity=item.quantity))
+        # brand new line
+        req = int(item.quantity)
+        if req > (slipper.quantity or 0):
+            raise ValueError(
+                f"Requested quantity exceeds available stock (requested={req}, available={slipper.quantity})"
+            )
+        db.add(CartItem(cart_id=cart.id, slipper_id=item.slipper_id, quantity=req))
     await db.commit()
     return await _reload_cart(db, cart.id)
 
@@ -69,7 +82,16 @@ async def update_item(db: AsyncSession, user_id: int, cart_item_id: int, update:
     if update.quantity == 0:
         await db.delete(target)
     else:
-        target.quantity = update.quantity
+        # Ensure we have slipper loaded and stock is sufficient
+        slipper = target.slipper
+        if slipper is None:
+            slipper = (await db.execute(select(StepUp).where(StepUp.id == target.slipper_id))).scalar_one_or_none()
+        req = int(update.quantity)
+        if req > (slipper.quantity or 0):
+            raise ValueError(
+                f"Requested quantity exceeds available stock (requested={req}, available={slipper.quantity})"
+            )
+        target.quantity = req
         db.add(target)
     await db.commit()
     return await _reload_cart(db, cart.id)

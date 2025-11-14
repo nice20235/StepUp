@@ -65,12 +65,16 @@ async def create_order_endpoint(
     )
     # Opt-in merge only when explicitly requested; default is to create a fresh order
     merge_flag = (x_merge_with_latest or "").lower() in ("1", "true", "yes")
-    new_order = await create_order(
-        db,
-        internal_order,
-        idempotency_key=x_idempotency_key,
-        merge_fallback=merge_flag,
-    )
+    try:
+        new_order = await create_order(
+            db,
+            internal_order,
+            idempotency_key=x_idempotency_key,
+            merge_fallback=merge_flag,
+        )
+    except ValueError as e:
+        # Stock or validation error -> 400
+        raise HTTPException(status_code=400, detail=str(e))
     # No cart coupling here; totals are computed from exact items provided
 
     
@@ -143,12 +147,15 @@ async def create_order_from_cart(
         items=items_source,
         notes=None,
     )
-    new_order = await create_order(
-        db,
-        internal_order,
-        idempotency_key=None,
-        merge_fallback=False,
-    )
+    try:
+        new_order = await create_order(
+            db,
+            internal_order,
+            idempotency_key=None,
+            merge_fallback=False,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Align total to cart total for consistency
     _, _, cart_total = await get_cart_totals(db, user.id)

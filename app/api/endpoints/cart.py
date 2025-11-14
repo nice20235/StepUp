@@ -53,7 +53,9 @@ async def add_cart_item(payload: CartItemCreate, user=Depends(get_current_user),
     try:
         cart = await add_item(db, user.id, payload)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        msg = str(e)
+        status = 404 if "not found" in msg.lower() else 400
+        raise HTTPException(status_code=status, detail=msg)
     return _serialize(cart)
 
 @router.put("/items/{cart_item_id}", response_model=CartOut)
@@ -61,7 +63,9 @@ async def update_cart_item(cart_item_id: int, payload: CartItemUpdate, user=Depe
     try:
         cart = await update_item(db, user.id, cart_item_id, payload)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        msg = str(e)
+        status = 404 if "not found" in msg.lower() else 400
+        raise HTTPException(status_code=status, detail=msg)
     return _serialize(cart)
 
 @router.delete("/items/{cart_item_id}", response_model=CartOut)

@@ -185,10 +185,20 @@ async def create_order(
             slipper = (await db.execute(select(StepUp).where(StepUp.id == item_data.slipper_id))).scalar_one_or_none()
             if not slipper:
                 raise ValueError(f"StepUp with ID {item_data.slipper_id} not found")
+            # Enforce stock limit against existing quantity in merge target
+            incoming_qty = int(item_data.quantity)
+            from app.core.config import settings
+            if incoming_qty > settings.ORDER_MAX_QTY_PER_ITEM:
+                incoming_qty = settings.ORDER_MAX_QTY_PER_ITEM
+            already = existing_by_slipper.get(item_data.slipper_id).quantity if item_data.slipper_id in existing_by_slipper else 0
+            if already + incoming_qty > (slipper.quantity or 0):
+                raise ValueError(
+                    f"Requested quantity exceeds available stock for item {item_data.slipper_id} (requested={already + incoming_qty}, available={slipper.quantity})"
+                )
             unit_price = slipper.price
             if item_data.slipper_id in existing_by_slipper:
                 existing_item = existing_by_slipper[item_data.slipper_id]
-                existing_item.quantity += item_data.quantity
+                existing_item.quantity += incoming_qty
                 existing_item.unit_price = unit_price  # keep current price snapshot
                 existing_item.total_price = unit_price * existing_item.quantity
                 db.add(existing_item)
@@ -196,9 +206,9 @@ async def create_order(
                 oi = OrderItem(
                     order_id=merge_target.id,
                     slipper_id=item_data.slipper_id,
-                    quantity=item_data.quantity,
+                    quantity=incoming_qty,
                     unit_price=unit_price,
-                    total_price=unit_price * item_data.quantity,
+                    total_price=unit_price * incoming_qty,
                     notes=item_data.notes,
                 )
                 db.add(oi)
@@ -228,6 +238,31 @@ async def create_order(
             .where(Order.id == merge_target.id)
         )
         return result.scalar_one()
+    # First pass: aggregate requested quantities and validate against stock
+    from app.core.config import settings
+    requested: dict[int, int] = {}
+    item_ids: list[int] = []
+    for it in order.items:
+        q = int(it.quantity)
+        if q > settings.ORDER_MAX_QTY_PER_ITEM:
+            q = settings.ORDER_MAX_QTY_PER_ITEM
+        requested[it.slipper_id] = requested.get(it.slipper_id, 0) + q
+        if it.slipper_id not in item_ids:
+            item_ids.append(it.slipper_id)
+
+    if item_ids:
+        rows = await db.execute(select(StepUp.id, StepUp.quantity, StepUp.price).where(StepUp.id.in_(item_ids)))
+        step_by_id = {int(r[0]): (int(r[1] or 0), float(r[2] or 0.0)) for r in rows.all()}
+        # Verify all exist and stock is sufficient
+        for sid, qty in requested.items():
+            if sid not in step_by_id:
+                raise ValueError(f"StepUp with ID {sid} not found")
+            available, _ = step_by_id[sid]
+            if qty > available:
+                raise ValueError(
+                    f"Requested quantity exceeds available stock for item {sid} (requested={qty}, available={available})"
+                )
+
     # Calculate total amount
     total_amount = 0.0
     order_items = []
@@ -238,8 +273,7 @@ async def create_order(
         slipper = slipper_result.scalar_one_or_none()
         if not slipper:
             raise ValueError(f"StepUp with ID {item_data.slipper_id} not found")
-        # Clamp unrealistic quantities to prevent client mistakes (e.g., using inventory qty)
-        from app.core.config import settings
+        # Clamp unrealistic quantities and rely on earlier stock validation
         qty = int(item_data.quantity)
         if qty > settings.ORDER_MAX_QTY_PER_ITEM:
             qty = settings.ORDER_MAX_QTY_PER_ITEM
