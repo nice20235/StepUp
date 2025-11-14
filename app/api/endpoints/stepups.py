@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import List, Optional, Dict
 import os
 from uuid import uuid4
 import logging
@@ -21,6 +21,56 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
+
+
+# ---------------------------
+# Helpers (local to endpoint)
+# ---------------------------
+async def _fetch_images_by_stepup(
+    db: AsyncSession, stepup_ids: List[int]
+) -> Dict[int, List[dict]]:
+    """Batch load images for provided stepup IDs and group them by stepup_id.
+
+    Returns dict: { stepup_id: [ {id, image_path, is_primary, alt_text, order_index}, ... ] }
+    """
+    if not stepup_ids:
+        return {}
+    from sqlalchemy import select, asc
+    from app.models.stepup import StepUpImage
+
+    rows = await db.execute(
+        select(StepUpImage)
+        .where(StepUpImage.slipper_id.in_(stepup_ids))
+        .order_by(asc(StepUpImage.slipper_id), asc(StepUpImage.order_index), asc(StepUpImage.id))
+    )
+    images_by_stepup: Dict[int, List[dict]] = {}
+    for img in rows.scalars().all():
+        images_by_stepup.setdefault(int(img.slipper_id), []).append(
+            {
+                "id": img.id,
+                "image_path": img.image_path,
+                "is_primary": img.is_primary,
+                "alt_text": img.alt_text,
+                "order_index": img.order_index,
+            }
+        )
+    return images_by_stepup
+
+
+def _serialize_stepup(stepup, *, images: Optional[List[dict]] = None) -> dict:
+    """Convert StepUp ORM object + optional images to API dict."""
+    return {
+        "id": stepup.id,
+        "name": stepup.name,
+        "size": stepup.size,
+        "price": stepup.price,
+        "quantity": stepup.quantity,
+        "category_id": stepup.category_id,
+        "category_name": stepup.category.name if stepup.category else None,
+        "image": stepup.image,
+        **({"images": images} if images is not None else {}),
+        "is_available": stepup.quantity > 0,
+    }
 
 
 @router.get("/")
@@ -46,21 +96,9 @@ async def read_slippers(
             search=search,
             sort=sort,
         )
-
-        items = [
-            {
-                "id": s.id,
-                "name": s.name,
-                "size": s.size,
-                "price": s.price,
-                "quantity": s.quantity,
-                "category_id": s.category_id,
-                "category_name": s.category.name if s.category else None,
-                "image": s.image,
-                "is_available": s.quantity > 0,
-            }
-            for s in slippers
-        ]
+        # Batch-load images and serialize
+        images_by_stepup = await _fetch_images_by_stepup(db, [s.id for s in slippers])
+        items = [_serialize_stepup(s, images=images_by_stepup.get(int(s.id), [])) for s in slippers]
 
         return {
             "items": items,
@@ -85,26 +123,13 @@ async def read_slipper(
 ):
     """Get a specific stepup by ID with optional image loading."""
     try:
-        slipper = await get_slipper(db, slipper_id=slipper_id, load_images=include_images)
-        if slipper is None:
+        stepup = await get_slipper(db, slipper_id=slipper_id, load_images=include_images)
+        if stepup is None:
             raise HTTPException(status_code=404, detail="StepUp not found")
-
-        response = {
-            "id": slipper.id,
-            "name": slipper.name,
-            "size": slipper.size,
-            "price": slipper.price,
-            "quantity": slipper.quantity,
-            "category_id": slipper.category_id,
-            "category_name": slipper.category.name if slipper.category else None,
-            "image": slipper.image,
-            "is_available": slipper.quantity > 0,
-            "created_at": slipper.created_at.isoformat(),
-            "updated_at": slipper.updated_at.isoformat() if slipper.updated_at else None,
-        }
-
-        if include_images and hasattr(slipper, "images"):
-            response["images"] = [
+        # Serialize, include images if requested
+        images = None
+        if include_images and hasattr(stepup, "images"):
+            images = [
                 {
                     "id": img.id,
                     "image_path": img.image_path,
@@ -112,10 +137,16 @@ async def read_slipper(
                     "alt_text": img.alt_text,
                     "order_index": img.order_index,
                 }
-                for img in slipper.images
+                for img in stepup.images
             ]
-
-        return response
+        base = _serialize_stepup(stepup, images=images)
+        base.update(
+            {
+                "created_at": stepup.created_at.isoformat(),
+                "updated_at": stepup.updated_at.isoformat() if stepup.updated_at else None,
+            }
+        )
+        return base
     except HTTPException:
         raise
     except Exception as e:
