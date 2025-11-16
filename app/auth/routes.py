@@ -90,24 +90,24 @@ async def login_user(
     request: Request = None
 ):
     """
-    Login user with phone number and password
+    Login user with name and password
     """
-    # Rate-limit by phone number + client IP
+    # Rate-limit by name + client IP
     client_ip = request.client.host if request and request.client else "unknown"
-    check_login_rate_limit(user_credentials.phone_number, client_ip)
-    # Authenticate user by phone number
-    user = await get_user_by_phone_number(db, user_credentials.phone_number)
+    check_login_rate_limit(user_credentials.name, client_ip)
+    # Authenticate user by name
+    user = await get_user_by_name(db, user_credentials.name)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect phone number or password"
+            detail="Неверный логин или пароль"
         )
     # Verify password
     from app.auth.password import verify_password
     if not verify_password(user_credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect phone number or password"
+            detail="Неверный логин или пароль"
         )
     # Absolute session expiration on first login
     now_session_exp = _calc_session_exp(datetime.utcnow())
