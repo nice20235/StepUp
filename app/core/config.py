@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     # Pydantic v2 settings: read from .env and ignore extra keys to prevent crashes from unused env vars
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     DATABASE_URL: str = "postgresql+asyncpg://iskandar:stepup2024@localhost:5432/stepup_db"
-    SECRET_KEY: str = "supersecretkey"
+    SECRET_KEY: str = "LDakBFywwkqZaLGerOiNVhvuOea-Xr_Oq5HkO5Lpjlg"
     ALGORITHM: str = "HS256"
     # CALLBACK_BASIC_AUTH_USERNAME and CALLBACK_BASIC_AUTH_PASSWORD removed (payment system)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15

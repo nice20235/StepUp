@@ -2,14 +2,14 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from app.core.config import settings
 from typing import Optional, Dict, Any
-import os
 
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
-REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "1"))  # Reduced from 7 to 1 day
-SESSION_MAX_DAYS = int(os.getenv("SESSION_MAX_DAYS", "1"))  # Default 1 day instead of 0 (disabled)
-SESSION_MAX_HOURS = int(os.getenv("SESSION_MAX_HOURS", "8"))  # Read from env, default 8 hours
+# Use settings from config.py instead of os.getenv to avoid caching issues
+ALGORITHM = settings.ALGORITHM
+SECRET_KEY = settings.SECRET_KEY
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+REFRESH_TOKEN_EXPIRE_DAYS = settings.REFRESH_TOKEN_EXPIRE_DAYS
+SESSION_MAX_DAYS = settings.SESSION_MAX_DAYS
+SESSION_MAX_HOURS = settings.SESSION_MAX_HOURS
 
 def _calc_session_exp(now: datetime, existing_session_exp: datetime | None = None) -> datetime | None:
     """Return absolute session expiration or None if disabled.
