@@ -152,10 +152,10 @@ class UserList(BaseModel):
     limit: int = Field(..., description="Maximum number of users returned")
 
 class UserLogin(BaseModel):
-    name: str = Field(
+    phone_number: str = Field(
         ..., 
-        description="User's first name", 
-        example="John"
+        description="User's phone number", 
+        example="+998901234567"
     )
     password: str = Field(
         ..., 
@@ -166,7 +166,7 @@ class UserLogin(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "name": "John",
+                "phone_number": "+998901234567",
                 "password": "securepassword123"
             }
         }
