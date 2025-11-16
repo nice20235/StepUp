@@ -185,6 +185,17 @@ stepup.db
 stepup.db-journal
 *.sqlite
 *.sqlite-journal
+*.db
+
+# Backup files
+*.backup
+*.bak
+*~
+
+# macOS files
+.DS_Store
+.AppleDouble
+.LSOverride
 
 # Local environment & secrets
 .env.local

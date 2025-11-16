@@ -4,7 +4,7 @@ from typing import Any
 class Settings(BaseSettings):
     # Pydantic v2 settings: read from .env and ignore extra keys to prevent crashes from unused env vars
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost/slippers"
+    DATABASE_URL: str = "postgresql+asyncpg://iskandar@localhost:5432/iskandar"
     SECRET_KEY: str = "supersecretkey"
     ALGORITHM: str = "HS256"
     # CALLBACK_BASIC_AUTH_USERNAME and CALLBACK_BASIC_AUTH_PASSWORD removed (payment system)
