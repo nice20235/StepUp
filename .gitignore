@@ -201,6 +201,8 @@ stepup.db-journal
 .env.local
 .env.prod
 .env.backup
+.env.*
+!.env.example
 
 # Logs
 logs/

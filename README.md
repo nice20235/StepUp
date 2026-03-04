@@ -28,7 +28,7 @@ FastAPI-based stepup ordering & payment system with user authentication, catalog
   pip install -r requirements.txt
   ```
 
-2. **Environment Configuration** – create a `.env` file in project root:
+2. **Environment Configuration** – copy `.env.example` to `.env` and fill in real values:
   ```env
   # --- Core ---
   DATABASE_URL=sqlite+aiosqlite:///./stepup.db
