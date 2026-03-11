@@ -12,7 +12,6 @@ async def create_payment(
     amount: float,
     currency: str,
     order_id: Optional[int] = None,
-    octo_payment_uuid: Optional[str] = None,
 ) -> Payment:
     payment = Payment(
         shop_transaction_id=shop_transaction_id,
@@ -20,7 +19,6 @@ async def create_payment(
         currency=currency,
         order_id=order_id,
         status=PaymentStatus.CREATED,
-        octo_payment_uuid=octo_payment_uuid,
     )
     db.add(payment)
     await db.commit()
@@ -33,22 +31,15 @@ async def get_payment_by_shop_tx(db: AsyncSession, shop_transaction_id: str) -> 
     return result.scalar_one_or_none()
 
 
-async def get_payment_by_uuid(db: AsyncSession, octo_payment_uuid: str) -> Optional[Payment]:
-    result = await db.execute(select(Payment).where(Payment.octo_payment_uuid == octo_payment_uuid))
-    return result.scalar_one_or_none()
-
 
 async def update_payment_status(
     db: AsyncSession,
     payment: Payment,
     *,
     status: PaymentStatus,
-    octo_payment_uuid: Optional[str] = None,
     raw: Optional[str] = None,
 ) -> Payment:
     payment.status = status
-    if octo_payment_uuid:
-        payment.octo_payment_uuid = octo_payment_uuid
     if raw:
         payment.raw = raw
     db.add(payment)

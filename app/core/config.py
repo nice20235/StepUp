@@ -35,20 +35,8 @@ class Settings(BaseSettings):
     TRUST_PROXY: bool = False  # если True, брать IP из X-Forwarded-For
     DEBUG: bool = True  # для разработки
     PHONE_ALLOWED_PREFIXES: str = "+,+998"  # допустимые префиксы телефонов
-    # OCTO payment configuration
-    OCTO_API_BASE: str = "https://secure.octo.uz"  # Base API URL per docs 
-    OCTO_SHOP_ID: str = ""  
-    OCTO_SECRET: str = ""   
-    OCTO_RETURN_URL: str = "https://www.optomoyoqkiyim.uz/"  # Your site success URL
-    OCTO_NOTIFY_URL: str = ""  # Webhook/notify URL from OCTO to us
-    OCTO_LANGUAGE: str = "ru"
-    OCTO_AUTO_CAPTURE: bool = True  # one-stage payment
-    OCTO_CURRENCY: str = "UZS"
-    OCTO_USD_UZS_RATE: float | None = None  # Set to enforce min refund >= 1 USD
-    OCTO_TEST: bool = False  # Use test mode payments when true
-    # Optional: pass-through params merged into prepare_payment payload
-    # Provide as JSON in .env, e.g. OCTO_EXTRA_PARAMS={"ui": {"ask_for_email": false}}
-    OCTO_EXTRA_PARAMS: dict[str, Any] | None = None
+    # Payment configuration: Stripe settings are read from environment variables
+    # (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_SUCCESS_URL, STRIPE_CANCEL_URL)
     # App runtime settings (production deploy alignment)
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000

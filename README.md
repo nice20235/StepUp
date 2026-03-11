@@ -1,6 +1,6 @@
 # StepUp API
 
-FastAPI-based stepup ordering & payment system with user authentication, catalog, orders, and OCTO payment integration.
+FastAPI-based stepup ordering & payment system with user authentication, catalog, orders, and Stripe payment integration.
 
 ## Features
 
@@ -9,7 +9,7 @@ FastAPI-based stepup ordering & payment system with user authentication, catalog
 - **StepUp Catalog**: CRUD + pagination, search, sorting, category filter, multi-image upload
 - **Categories**: CRUD & caching
 - **Orders**: Creation with multiple items, status transitions, finance filter (only paid/refunded)
-- **Payments (OCTO)**: One‑stage auto-capture prepare_payment, webhook (notify) handling, refunds
+- **Payments (Stripe)**: Stripe Checkout (hosted) + webhooks for asynchronous status updates and refunds
 ## Maintenance/cleanup notes
 
 - Deprecated/unused modules removed: `app/api/endpoints/food.py`, `app/api/endpoints/system.py`, `app/crud/food.py`, `app/schemas/simple_order.py`.
@@ -26,40 +26,6 @@ FastAPI-based stepup ordering & payment system with user authentication, catalog
 1. **Install dependencies**
   ```bash
   pip install -r requirements.txt
-  ```
-
-2. **Environment Configuration** – copy `.env.example` to `.env` and fill in real values:
-  ```env
-  # --- Core ---
-  DATABASE_URL=sqlite+aiosqlite:///./stepup.db
-  # For production switch to PostgreSQL:
-  # DATABASE_URL=postgresql+asyncpg://user:password@localhost/stepup
-  SECRET_KEY=change_me_strong_secret
-  ACCESS_TOKEN_EXPIRE_MINUTES=15
-  REFRESH_TOKEN_EXPIRE_DAYS=7
-  ALLOWED_ORIGINS=http://localhost:3000,https://your-frontend.domain
-
-  # --- OCTO Payments ---
-  OCTO_API_BASE=https://secure.octo.uz
-  OCTO_SHOP_ID=your_shop_id
-  OCTO_SECRET=your_secret
-  OCTO_RETURN_URL=https://your-frontend.domain/
-  OCTO_NOTIFY_URL=https://your-backend.domain/payments/octo/notify
-  OCTO_LANGUAGE=ru
-  OCTO_AUTO_CAPTURE=true
-  OCTO_CURRENCY=UZS
-  OCTO_TEST=true
-  # Optional JSON (must be a single line):
-  # OCTO_EXTRA_PARAMS={"ui":{"ask_for_email":false}}
-
-  # --- Optional refund min USD logic ---
-  # OCTO_USD_UZS_RATE=12600
-
-  # --- Rate limiting ---
-  RATE_LIMIT_REQUESTS=100
-  RATE_LIMIT_WINDOW_SEC=60
-  RATE_LIMIT_EXCLUDE_PATHS=/docs,/redoc,/openapi.json,/favicon.ico,/static
-  DEBUG=True
   ```
 
 3. **Database Setup**
@@ -107,12 +73,8 @@ FastAPI-based stepup ordering & payment system with user authentication, catalog
 - `PUT /orders/{order_id}` - Update order
 - `DELETE /orders/{order_id}` - Delete order
 
-### Payments (OCTO)
-- `POST /payments/octo/create` - Create OCTO payment (accepts amount / total_sum aliases and orderId)
-- `POST /payments/octo/refund` - Refund by `octo_payment_UUID`
-- `POST /payments/octo/notify` - Webhook (configured in OCTO panel). Updates payment + order status.
-
-Webhook will set order status to confirmed on final success statuses: `paid,captured,completed,succeeded`.
+### Payments
+Payment flows are handled via Stripe Checkout and webhook endpoints under `/api`.
 
 ## Usage Examples
 
@@ -145,19 +107,8 @@ curl -X POST "http://localhost:8000/orders/" \
   -d '{"user_id":1, "items":[{"slipper_id":1, "quantity":2}]}'
 ```
 
-### Create OCTO payment
-```bash
-curl -X POST "http://localhost:8000/payments/octo/create" \
-  -H "Content-Type: application/json" \
-  -d '{"amount": 50000, "description": "Order #123", "orderId": 1}'
-```
-
-### Refund OCTO payment
-```bash
-curl -X POST "http://localhost:8000/payments/octo/refund" \
-  -H "Content-Type: application/json" \
-  -d '{"octo_payment_UUID": "uuid-here", "amount": 50000}'
-```
+### Create payment (Stripe Checkout)
+Use the Stripe Checkout creation endpoint (see `/api/payments/*`) to create a hosted session for payment.
 
 ## Token Management
 
@@ -189,7 +140,7 @@ curl -X POST "http://localhost:8000/payments/octo/refund" \
 - Set `DEBUG=False` and tighten `ALLOWED_ORIGINS`
 - Use a proper process manager (systemd, supervisor) + reverse proxy (nginx)
 - Configure HTTPS for secure cookies (`COOKIE_SECURE=True`)
-- Keep `OCTO_NOTIFY_URL` publicly reachable and return 200 quickly
+- Keep webhook endpoints publicly reachable and return 200 quickly
 - Add webhook signature validation (TODO enhancement)
 - Consider adding Alembic migrations before schema changes
 

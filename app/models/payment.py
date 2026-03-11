@@ -20,7 +20,6 @@ class Payment(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     order_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     shop_transaction_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    octo_payment_uuid: Mapped[str | None] = mapped_column(String(64), unique=False, nullable=True, index=True)
     amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="UZS")
     status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus), default=PaymentStatus.CREATED, nullable=False, index=True)

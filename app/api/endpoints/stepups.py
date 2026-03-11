@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 import os
+import asyncio
 from uuid import uuid4
 import logging
 from app.db.database import get_db
@@ -282,7 +283,8 @@ async def upload_slipper_images(
     uploaded_images: List[dict] = []
     first_image_path: Optional[str] = None
     upload_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../static/images"))
-    os.makedirs(upload_dir, exist_ok=True)
+    # Create directory off the event loop to avoid blocking
+    await asyncio.to_thread(os.makedirs, upload_dir, exist_ok=True)
 
     for i, image in enumerate(images):
         ext = os.path.splitext(image.filename)[1]
@@ -291,8 +293,12 @@ async def upload_slipper_images(
 
         filename = f"{uuid4().hex}{ext}"
         file_path = os.path.join(upload_dir, filename)
-        with open(file_path, "wb") as f:
-            f.write(await image.read())
+        # Read uploaded file in async manner, then write off the event loop
+        data = await image.read()
+        def _write_bytes(path, data_bytes):
+            with open(path, "wb") as f:
+                f.write(data_bytes)
+        await asyncio.to_thread(_write_bytes, file_path, data)
         relative_path = f"/static/images/{filename}"
 
         slipper_image = StepUpImage(
@@ -390,8 +396,10 @@ async def delete_slipper_image(
         file_path = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "../../", image.image_path.lstrip("/"))
         )
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        # Check and remove file off the event loop
+        exists = await asyncio.to_thread(os.path.exists, file_path)
+        if exists:
+            await asyncio.to_thread(os.remove, file_path)
     except Exception as e:
         logger.warning(f"Failed to delete physical file {image.image_path}: {e}")
 

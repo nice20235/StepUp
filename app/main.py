@@ -17,7 +17,6 @@ from app.core.cache import cache
 from app.db.database import init_db, close_db
 from app.api.endpoints import users, stepups, orders, categories
 from app.api.endpoints import cart as cart_router
-from app.api.endpoints import octo as octo_payments
 from app.auth.routes import auth_router
 from app.schemas.responses import HealthCheckResponse, ErrorResponse
 
@@ -253,7 +252,6 @@ app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(categories.router, prefix="/categories", tags=["Categories"])
 app.include_router(stepups.router, prefix="/stepups", tags=["StepUps"])
 app.include_router(orders.router, prefix="/orders", tags=["Orders"])
-app.include_router(octo_payments.router, prefix="/payments/octo", tags=["Payments (OCTO)"])
 # Cart router already defines its tag; avoid re-specifying to prevent duplicates
 app.include_router(cart_router.router)
 # System diagnostics router removed
