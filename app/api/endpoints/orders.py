@@ -15,9 +15,7 @@ from app.crud.order import (
     create_order,
     update_order,
     delete_order,
-    get_orders_by_payment_statuses,
 )
-from app.models.payment import PaymentStatus
 from app.models.order import OrderItem
 from app.models.stepup import StepUp
 from app.core.timezone import to_tashkent, format_tashkent_compact
@@ -210,10 +208,6 @@ async def create_order_from_cart(
 async def list_orders(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
-    finance: str | None = Query(
-        None,
-        description="Financial filter: 'paid_refunded' shows only orders with latest payment PAID or REFUNDED",
-    ),
 ):
     """List orders.
     - Regular user: only their own orders.
@@ -222,119 +216,56 @@ async def list_orders(
     """
     try:
         # Build a per-user cache key shim by referencing args in cached decorator
-        # The cached decorator includes function args in key, so ensure user.id and finance are present
         _ = user.id  # referenced for clarity; no-op
-        _ = finance
-        if finance and finance.lower() == "paid_refunded":
-            statuses = [PaymentStatus.PAID, PaymentStatus.REFUNDED]
-            if user.is_admin:
-                logger.info("Admin %s listing orders with finance filter paid_refunded", user.name)
-                rows, total = await get_orders_by_payment_statuses(db, statuses=statuses, load_relationships=False)
-            else:
-                logger.info("User %s listing OWN orders with finance filter paid_refunded", user.name)
-                rows, total = await get_orders_by_payment_statuses(db, statuses=statuses, user_id=user.id, load_relationships=False)
-            # rows are tuples (order, payment_status)
-            # Batch load items for all orders
-            orders_only = [order for order, _ in rows]
-            order_ids = [o.id for o in orders_only]
-            # Batch load users for these orders to avoid N+1
-            user_ids = list({o.user_id for o in orders_only})
-            users_by_id: dict[int, tuple[str, str]] = {}
-            if user_ids:
-                from app.models.user import User as _User
-                user_rows = await db.execute(select(_User.id, _User.name, _User.surname).where(_User.id.in_(user_ids)))
-                for uid, nm, sn in user_rows.all():
-                    users_by_id[int(uid)] = (nm, sn)
-            items_by_order: dict[int, list[dict]] = {}
-            if order_ids:
-                data = await db.execute(
-                    select(OrderItem, StepUp)
-                    .join(StepUp, StepUp.id == OrderItem.slipper_id)
-                    .where(OrderItem.order_id.in_(order_ids))
-                    .order_by(OrderItem.id.asc())
-                )
-                for oi, sl in data.all():
-                    items_by_order.setdefault(oi.order_id, []).append({
-                        "slipper_id": oi.slipper_id,
-                        "quantity": oi.quantity,
-                        "unit_price": oi.unit_price,
-                        "total_price": oi.total_price,
-                        "name": getattr(sl, "name", None),
-                        "size": getattr(sl, "size", None),
-                        "image": getattr(sl, "image", None),
-                    })
-
-            result = []
-            for order, pay_status in rows:
-                full_name = None
-                tup = users_by_id.get(order.user_id)
-                if tup:
-                    full_name = f"{tup[0]} {tup[1]}".strip()
-                result.append({
-                    "id": order.id,
-                    "order_id": order.order_id,
-                    "user_id": order.user_id,
-                    "user_name": full_name,
-                    "status": order.status.value,
-                    "payment_status": (
-                        "success" if pay_status == PaymentStatus.PAID else (
-                            "refunded" if pay_status == PaymentStatus.REFUNDED else None
-                        )
-                    ),
-                    "total_amount": order.total_amount,
-                    "created_at": format_tashkent_compact(order.created_at),
-                    "updated_at": format_tashkent_compact(order.updated_at),
-                    "items": items_by_order.get(order.id, []),
-                })
-            return result
+        if user.is_admin:
+            logger.info(f"Admin {user.name} listing ALL orders")
+            orders, total = await get_orders(db, skip=0, limit=100000, load_relationships=False)
         else:
-            if user.is_admin:
-                logger.info(f"Admin {user.name} listing ALL orders")
-                orders, total = await get_orders(db, skip=0, limit=100000, load_relationships=False)
-            else:
-                logger.info(f"User {user.name} listing OWN orders")
-                orders, total = await get_orders(db, skip=0, limit=100000, user_id=user.id, load_relationships=False)
-            # Batch load items for all orders
-            order_ids = [o.id for o in orders]
-            user_ids = list({o.user_id for o in orders})
-            users_by_id: dict[int, tuple[str, str]] = {}
-            if user_ids:
-                from app.models.user import User as _User
-                user_rows = await db.execute(select(_User.id, _User.name, _User.surname).where(_User.id.in_(user_ids)))
-                for uid, nm, sn in user_rows.all():
-                    users_by_id[int(uid)] = (nm, sn)
-            items_by_order: dict[int, list[dict]] = {}
-            if order_ids:
-                data = await db.execute(
-                    select(OrderItem, StepUp)
-                    .join(StepUp, StepUp.id == OrderItem.slipper_id)
-                    .where(OrderItem.order_id.in_(order_ids))
-                )
-                for oi, sl in data.all():
-                    items_by_order.setdefault(oi.order_id, []).append({
-                        "slipper_id": oi.slipper_id,
-                        "quantity": oi.quantity,
-                        "unit_price": oi.unit_price,
-                        "total_price": oi.total_price,
-                        "name": getattr(sl, "name", None),
-                        "size": getattr(sl, "size", None),
-                        "image": getattr(sl, "image", None),
-                    })
+            logger.info(f"User {user.name} listing OWN orders")
+            orders, total = await get_orders(db, skip=0, limit=100000, user_id=user.id, load_relationships=False)
 
-            return [
-                {
-                    "id": order.id,
-                    "order_id": order.order_id,
-                    "user_id": order.user_id,
-                    "user_name": (f"{users_by_id[order.user_id][0]} {users_by_id[order.user_id][1]}".strip() if order.user_id in users_by_id else None),
-                    "status": order.status.value,
-                    "total_amount": order.total_amount,
-                    "created_at": format_tashkent_compact(order.created_at),
-                    "updated_at": format_tashkent_compact(order.updated_at),
-                    "items": items_by_order.get(order.id, []),
-                }
-                for order in orders
-            ]
+        # Batch load users and items for these orders to avoid N+1
+        order_ids = [o.id for o in orders]
+        user_ids = list({o.user_id for o in orders})
+        users_by_id: dict[int, tuple[str, str]] = {}
+        if user_ids:
+            from app.models.user import User as _User
+            user_rows = await db.execute(select(_User.id, _User.name, _User.surname).where(_User.id.in_(user_ids)))
+            for uid, nm, sn in user_rows.all():
+                users_by_id[int(uid)] = (nm, sn)
+
+        items_by_order: dict[int, list[dict]] = {}
+        if order_ids:
+            data = await db.execute(
+                select(OrderItem, StepUp)
+                .join(StepUp, StepUp.id == OrderItem.slipper_id)
+                .where(OrderItem.order_id.in_(order_ids))
+            )
+            for oi, sl in data.all():
+                items_by_order.setdefault(oi.order_id, []).append({
+                    "slipper_id": oi.slipper_id,
+                    "quantity": oi.quantity,
+                    "unit_price": oi.unit_price,
+                    "total_price": oi.total_price,
+                    "name": getattr(sl, "name", None),
+                    "size": getattr(sl, "size", None),
+                    "image": getattr(sl, "image", None),
+                })
+
+        return [
+            {
+                "id": order.id,
+                "order_id": order.order_id,
+                "user_id": order.user_id,
+                "user_name": (f"{users_by_id[order.user_id][0]} {users_by_id[order.user_id][1]}".strip() if order.user_id in users_by_id else None),
+                "status": order.status.value,
+                "total_amount": order.total_amount,
+                "created_at": format_tashkent_compact(order.created_at),
+                "updated_at": format_tashkent_compact(order.updated_at),
+                "items": items_by_order.get(order.id, []),
+            }
+            for order in orders
+        ]
     except Exception as e:
         logger.error(f"Error fetching orders: {e}")
         raise HTTPException(status_code=500, detail="Error fetching orders")

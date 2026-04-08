@@ -1,3 +1,13 @@
+import os
+import sys
+
+# Ensure package imports work even when running with cwd set to `app/`.
+# This inserts the repository root into sys.path so `import app.*` succeeds.
+if __package__ is None:
+    repo_root = os.path.dirname(os.path.dirname(__file__))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -12,10 +22,16 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from app.core.config import settings
-from app.core.middleware import PerformanceMiddleware, CompressionHeaderMiddleware, SecurityHeadersMiddleware
+from app.core.middleware import (
+    PerformanceMiddleware,
+    CompressionHeaderMiddleware,
+    SecurityHeadersMiddleware,
+    BasicAuthRPCMiddleware,
+)
 from app.core.cache import cache
 from app.db.database import init_db, close_db
 from app.api.endpoints import users, stepups, orders, categories
+from app.api import rpc as rpc_api
 from app.api.endpoints import cart as cart_router
 from app.auth.routes import auth_router
 from app.schemas.responses import HealthCheckResponse, ErrorResponse
@@ -173,6 +189,7 @@ print(f"[CORS] allowed_origins={allowed} regex={origin_regex}")
 app.add_middleware(PerformanceMiddleware)
 app.add_middleware(CompressionHeaderMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(BasicAuthRPCMiddleware)
 
 # GZip compression for responses > 1KB
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -254,6 +271,8 @@ app.include_router(stepups.router, prefix="/stepups", tags=["StepUps"])
 app.include_router(orders.router, prefix="/orders", tags=["Orders"])
 # Cart router already defines its tag; avoid re-specifying to prevent duplicates
 app.include_router(cart_router.router)
+# JSON-RPC endpoint for acquiring
+app.include_router(rpc_api.router, prefix="/api")
 # System diagnostics router removed
 
 # Serve static files (images, etc.)

@@ -1,11 +1,14 @@
-"""
-Performance monitoring middleware
-"""
-import time
+"""Core middleware: performance, compression, security, and Basic Auth for /rpc."""
+import base64
 import logging
+import time
 from typing import Callable
+
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -92,3 +95,54 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
         
         return response
+
+
+class BasicAuthRPCMiddleware(BaseHTTPMiddleware):
+    """Basic Auth middleware for the JSON-RPC /rpc endpoint.
+
+    The acquirer authenticates using HTTP Basic Auth. Credentials are configured
+    via environment variables and exposed through `settings`:
+
+    - ACQUIRING_RPC_BASIC_USERNAME
+    - ACQUIRING_RPC_BASIC_PASSWORD
+    """
+
+    def __init__(self, app):
+        super().__init__(app)
+        self._username = settings.ACQUIRING_RPC_BASIC_USERNAME
+        self._password = settings.ACQUIRING_RPC_BASIC_PASSWORD
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Apply Basic Auth protection only for the /rpc endpoint
+        if request.url.path != "/rpc":
+            return await call_next(request)
+
+        auth_header = request.headers.get("authorization") or request.headers.get(
+            "Authorization"
+        )
+        if not auth_header or not auth_header.lower().startswith("basic "):
+            return self._unauthorized_response()
+
+        encoded_credentials = auth_header.split(" ", 1)[1].strip()
+        try:
+            decoded = base64.b64decode(encoded_credentials).decode("utf-8")
+        except Exception:
+            return self._unauthorized_response()
+
+        if ":" not in decoded:
+            return self._unauthorized_response()
+
+        username, password = decoded.split(":", 1)
+        if username != self._username or password != self._password:
+            logger.warning("Invalid Basic Auth credentials for /rpc")
+            return self._unauthorized_response()
+
+        return await call_next(request)
+
+    @staticmethod
+    def _unauthorized_response() -> Response:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Unauthorized"},
+            headers={"WWW-Authenticate": "Basic realm=\"rpc\""},
+        )

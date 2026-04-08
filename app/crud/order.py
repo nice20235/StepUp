@@ -7,7 +7,6 @@ from app.models.stepup import StepUp
 from app.schemas.order import OrderCreate, OrderUpdate, OrderItemCreate
 from typing import Optional, List, Tuple
 import logging
-from app.models.payment import Payment, PaymentStatus
 from datetime import datetime, timedelta
 import uuid
 
@@ -70,63 +69,7 @@ async def get_orders(
     return orders, total
 
 
-async def get_orders_by_payment_statuses(
-    db: AsyncSession,
-    *,
-    statuses: List[PaymentStatus],
-    user_id: Optional[int] = None,
-    load_relationships: bool = True,
-) -> Tuple[List[Tuple[Order, Optional[PaymentStatus]]], int]:
-    """Return orders where the latest payment status is in provided statuses.
-    If user_id is provided, restrict to that user's orders.
-    Returns list of tuples: (Order, latest_payment_status).
-    """
-    # Subquery to get latest payment per order by created_at
-    latest_payment_sq = (
-        select(
-            Payment.order_id,
-            func.max(Payment.created_at).label("max_created"),
-        )
-        .group_by(Payment.order_id)
-        .subquery()
-    )
-
-    # Join orders with latest payments
-    base = (
-        select(Order, Payment.status)
-        .join(latest_payment_sq, latest_payment_sq.c.order_id == Order.id, isouter=True)
-        .join(
-            Payment,
-            (Payment.order_id == latest_payment_sq.c.order_id)
-            & (Payment.created_at == latest_payment_sq.c.max_created),
-            isouter=True,
-        )
-    )
-
-    conditions = []
-    if user_id is not None:
-        conditions.append(Order.user_id == user_id)
-    if statuses:
-        conditions.append(Payment.status.in_(statuses))
-    if conditions:
-        base = base.where(and_(*conditions))
-
-    base = base.order_by(Order.created_at.desc())
-    # Guard against duplicate rows per order due to joins/ties in latest payments
-    base = base.distinct(Order.id)
-
-    # Count
-    count_query = select(func.count()).select_from(base.subquery())
-    total = (await db.execute(count_query)).scalar() or 0
-
-    # Data
-    if load_relationships:
-        base = base.options(
-            joinedload(Order.user),
-            selectinload(Order.items).selectinload(OrderItem.slipper),
-        )
-    rows = (await db.execute(base)).unique().all()
-    return rows, total
+# Payment-specific helpers removed as payments have been deleted from the project.
 
 async def create_order(
     db: AsyncSession,
@@ -166,7 +109,6 @@ async def create_order(
                 .where(
                     Order.user_id == order.user_id,
                     Order.status == OrderStatus.PENDING,
-                    Order.payment_uuid.is_(None),
                     Order.created_at >= cutoff,
                 )
                 .order_by(Order.created_at.desc())
@@ -418,16 +360,6 @@ async def delete_order(db: AsyncSession, db_order: Order) -> bool:
     await db.commit()
     return True
 
-async def update_order_payment_uuid(db: AsyncSession, order_id: int, payment_uuid: str) -> Optional[Order]:
-    """Attach or update payment_uuid for an order (internal use only, not exposed)."""
-    order = await get_order(db, order_id, load_relationships=False)
-    if not order:
-        return None
-    order.payment_uuid = payment_uuid
-    db.add(order)
-    await db.commit()
-    await db.refresh(order)
-    return order
 
 async def get_user_orders(
     db: AsyncSession,

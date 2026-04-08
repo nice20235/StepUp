@@ -3,8 +3,26 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.auth.dependencies import get_current_user
-from app.schemas.cart import CartItemCreate, CartItemUpdate, CartOut, CartItemOut, CartTotalOut
-from app.crud.cart import get_or_create_cart, add_item, update_item, remove_item, clear_cart, get_cart, get_cart_totals
+from app.schemas.cart import (
+    CartItemCreate,
+    CartItemUpdate,
+    CartOut,
+    CartItemOut,
+    CartTotalOut,
+    CartAddItemRequest,
+    CartItemPublic,
+    CartPublicData,
+    CartPublicResponse,
+)
+from app.crud.cart import (
+    get_or_create_cart,
+    add_item,
+    update_item,
+    remove_item,
+    clear_cart,
+    get_cart,
+    get_cart_totals,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +55,47 @@ def _serialize(cart) -> CartOut:
         ))
     return CartOut(id=cart.id, items=items_out, total_items=total_items, total_quantity=total_quantity, total_amount=total_amount)
 
+
+def _serialize_public(cart) -> CartPublicResponse:
+    """Serialize cart into the public structure required by the spec.
+
+    All monetary values are in UZS (not tiyin).
+    """
+
+    items: list[CartItemPublic] = []
+    total_amount_uzs: int = 0
+
+    for ci in cart.items:
+        slipper = getattr(ci, "slipper", None)
+        if not slipper:
+            # If product is not loaded, skip to avoid incomplete data
+            continue
+
+        # StepUp.price is stored in UZS (float); cast to int for API
+        price = int(slipper.price)
+        subtotal = price * ci.quantity
+        total_amount_uzs += subtotal
+
+        items.append(
+            CartItemPublic(
+                product_id=ci.slipper_id,
+                name=slipper.name,
+                price=price,
+                quantity=ci.quantity,
+                subtotal=subtotal,
+            )
+        )
+
+    data = CartPublicData(
+        id=f"cart_{cart.id}",
+        items=items,
+        total_amount=total_amount_uzs,
+        currency="UZS",
+        items_count=len(items),
+    )
+
+    return CartPublicResponse(status="success", data=data)
+
 @router.get("", response_model=CartOut)
 async def get_my_cart(user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     cart = await get_or_create_cart(db, user.id)
@@ -48,15 +107,31 @@ async def get_my_cart_total(user=Depends(get_current_user), db: AsyncSession = D
     total_items, total_quantity, total_amount = await get_cart_totals(db, user.id)
     return CartTotalOut(total_items=total_items, total_quantity=total_quantity, total_amount=total_amount)
 
-@router.post("/items", response_model=CartOut)
-async def add_cart_item(payload: CartItemCreate, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@router.post("/items", response_model=CartPublicResponse)
+async def add_cart_item(payload: CartAddItemRequest, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    # Validate quantity
+    if payload.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than 0")
+
+    # Map external product_id to internal slipper_id
+    internal_item = CartItemCreate(slipper_id=payload.product_id, quantity=payload.quantity)
+
     try:
-        cart = await add_item(db, user.id, payload)
+        # Perform the mutation first
+        await add_item(db, user.id, internal_item)
     except ValueError as e:
         msg = str(e)
-        status = 404 if "not found" in msg.lower() else 400
-        raise HTTPException(status_code=status, detail=msg)
-    return _serialize(cart)
+        status_code = 404 if "not found" in msg.lower() else 400
+        raise HTTPException(status_code=status_code, detail=msg)
+
+    # Re-load the cart in the same way as GET /cart so the
+    # response always reflects the latest persisted state.
+    cart = await get_cart(db, user.id)
+    if cart is None:
+        # Should not normally happen, but guard against edge cases
+        raise HTTPException(status_code=500, detail="Cart not found after update")
+
+    return _serialize_public(cart)
 
 @router.put("/items/{cart_item_id}", response_model=CartOut)
 async def update_cart_item(cart_item_id: int, payload: CartItemUpdate, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):

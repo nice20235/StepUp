@@ -75,7 +75,7 @@ async def init_db():
         from app.models.stepup import StepUp, Category, StepUpImage  # noqa: F401
         from app.models.order import Order, OrderItem  # noqa: F401
         from app.models.cart import Cart, CartItem  # noqa: F401
-        from app.models.payment import Payment  # noqa: F401
+        from app.models.transaction import Transaction  # noqa: F401
         
         # Create all tables (indexes are automatically created from model definitions)
         await conn.run_sync(Base.metadata.create_all)
@@ -93,11 +93,22 @@ async def _apply_data_migrations(conn):
         order_count = result.scalar()
         
         if order_count > 0:
+            # Ensure enum contains expected uppercase members before attempting to update
+            # PostgreSQL will raise if we try to set an enum column to a value that isn't registered.
+            for enum_val in ("PENDING", "PAID", "REFUNDED", "CONFIRMED", "PREPARING", "READY", "DELIVERED", "CANCELLED"):
+                try:
+                    # Use ALTER TYPE ... ADD VALUE; IF NOT EXISTS may not be supported on all PG versions,
+                    # so ignore failures if the value already exists or if the DB doesn't support IF NOT EXISTS.
+                    await conn.execute(text(f"ALTER TYPE orderstatus ADD VALUE IF NOT EXISTS '{enum_val}'"))
+                except Exception:
+                    # Best-effort: ignore and continue — update below will still succeed for existing rows
+                    pass
+
             # Normalize order statuses to uppercase standard values
             await conn.execute(text("""
                 UPDATE orders 
-                SET status = UPPER(status)
-                WHERE status IN ('pending', 'paid', 'refunded', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled')
+                SET status = UPPER(status::text)::orderstatus
+                WHERE status::text IN ('pending', 'paid', 'refunded', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled')
             """))
             
             await conn.execute(text("""

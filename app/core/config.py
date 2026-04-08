@@ -2,10 +2,22 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Any
 
 class Settings(BaseSettings):
+    """Application settings.
+
+    All sensitive values (DB credentials, secret keys, external API passwords)
+    must be provided via environment variables or .env file. The defaults below
+    are **development placeholders only** and are safe to publish to GitHub.
+    """
+
     # Pydantic v2 settings: read from .env and ignore extra keys to prevent crashes from unused env vars
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    DATABASE_URL: str = "postgresql+asyncpg://iskandar:stepup2024@localhost:5432/stepup_db"
-    SECRET_KEY: str = "LDakBFywwkqZaLGerOiNVhvuOea-Xr_Oq5HkO5Lpjlg"
+
+    # Database connection string. Override in production via env DATABASE_URL.
+    # Example: postgresql+asyncpg://user:strong_password@db-host:5432/stepup_db
+    DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost:5432/stepup_db"
+
+    # JWT secret key. MUST be overridden in any non-local environment.
+    SECRET_KEY: str = "CHANGE_ME_DEVELOPMENT_SECRET_KEY"
     ALGORITHM: str = "HS256"
     # CALLBACK_BASIC_AUTH_USERNAME and CALLBACK_BASIC_AUTH_PASSWORD removed (payment system)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
@@ -37,6 +49,16 @@ class Settings(BaseSettings):
     PHONE_ALLOWED_PREFIXES: str = "+,+998"  # допустимые префиксы телефонов
     # Payment configuration: Stripe settings are read from environment variables
     # (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_SUCCESS_URL, STRIPE_CANCEL_URL)
+
+    # Acquiring integration settings (safe defaults; override in .env for real creds)
+    ACQUIRING_BASE_URL: str = "https://acquiring.example.com"  # Base URL of acquirer REST API
+    ACQUIRING_RPC_BASIC_USERNAME: str = "change_me_rpc_user"     # Basic Auth login for legacy /rpc endpoint
+    ACQUIRING_RPC_BASIC_PASSWORD: str = "change_me_rpc_password" # Basic Auth password for legacy /rpc endpoint
+
+    # JSON-RPC auth and external ekayring API (development placeholders)
+    RPC_USERNAME: str = "change_me_merchant_api_user"
+    RPC_PASSWORD: str = "change_me_merchant_api_password"
+    EKAYRING_BASE_URL: str = "https://ekayring-api.example.com"
     # App runtime settings (production deploy alignment)
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
