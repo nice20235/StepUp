@@ -33,6 +33,7 @@ from app.db.database import init_db, close_db
 from app.api.endpoints import users, stepups, orders, categories
 from app.api import rpc as rpc_api
 from app.api.endpoints import cart as cart_router
+from app.api.endpoints import payment as payment_router
 from app.auth.routes import auth_router
 from app.schemas.responses import HealthCheckResponse, ErrorResponse
 
@@ -273,6 +274,15 @@ app.include_router(orders.router, prefix="/orders", tags=["Orders"])
 app.include_router(cart_router.router)
 # JSON-RPC endpoint for acquiring
 app.include_router(rpc_api.router, prefix="/api")
+"""Payment redirect endpoint for bank acquiring.
+
+Exposed as:
+- GET /api/payment/init/{order_id}?amount=...
+
+It is implemented in app/api/endpoints/payment.py and uses AcquiringClient
+to obtain a payment URL, then returns a RedirectResponse to that URL.
+"""
+app.include_router(payment_router.router, prefix="/api")
 # System diagnostics router removed
 
 # Serve static files (images, etc.)

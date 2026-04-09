@@ -126,3 +126,17 @@ class AcquiringClient:
 
         path = f"api/info/{id}"
         return await self._get(path)
+
+    async def get_payment_link(self, *, order_id: int, amount: int) -> str:
+        """Temporary helper to obtain a payment URL for redirecting the user.
+
+        NOTE: This is a stub implementation intended for development/testing only.
+        Replace this method with a real call to the bank's API once their contract
+        for creating payment links is finalized.
+
+        For now we simply construct a demo URL based on the base_url so that the
+        frontend flow can be wired and tested end-to-end.
+        """
+
+        # Example: https://bank.example.com/pay?order_id=123&amount=10000
+        return f"{self.base_url}/pay?order_id={order_id}&amount={amount}"
