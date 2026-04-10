@@ -95,45 +95,6 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application with optimizations
 app = FastAPI(
     title="StepUp Order System API",
-    description="""
-    A high-performance StepUp ordering system with comprehensive features.
-    
-    ## 🔐 Authentication
-    
-    1. **Register**: `POST /auth/register` - Create new user account
-    2. **Login**: `POST /auth/login` - Get JWT tokens in secure cookies
-    3. **Refresh**: `POST /auth/refresh` - Refresh access token
-    4. **Logout**: `POST /auth/logout` - Clear authentication cookies
-    5. **Forgot Password**: `POST /auth/forgot-password` - Reset password
-    
-    ## 🏪 Features
-    
-    * **JWT-based authentication** with HttpOnly cookies
-    * **Role-based access control** (User/Admin)
-    * **Rate limiting** and security headers
-    * **Comprehensive StepUp management** with multiple images
-    * **Order tracking system** with status updates
-    * **Pagination and filtering** on all list endpoints
-    * **Caching system** for improved performance
-    * **File upload support** for slipper images
-    * **Analytics endpoints** for admin dashboard
-    
-    ## 🚀 Performance
-    
-    * **Async database operations** with connection pooling
-    * **Redis-like caching** with TTL support
-    * **Optimized queries** with pagination and filtering
-    * **Response compression** for large payloads
-    * **Performance monitoring** headers
-    
-    ## 📊 API Structure
-    
-    * `/auth/*` - Authentication endpoints
-    * `/users/*` - User management (admin)
-    * `/stepups/*` - StepUp catalog and images
-    * `/orders/*` - Order management
-    * `/categories/*` - Product categories
-    """,
     version="2.0.0",
     lifespan=lifespan,
     # Optimize OpenAPI generation
