@@ -81,6 +81,21 @@ class OrderCreatePublic(BaseModel):
             raise ValueError('Order must have at least one item')
         return v
 
+
+class OrderFromCartRequest(BaseModel):
+    """Request schema for creating an order from a cart.
+
+    The frontend sends:
+    - cart_id: public cart identifier like "cart_1" (matches GET /cart public id)
+    - amount: total cart amount as seen on the client side (in UZS)
+
+    Backend will validate that cart_id belongs to the current user and may
+    compare the amount against server-side totals for additional safety.
+    """
+
+    cart_id: str = Field(..., description="Public cart identifier, e.g. 'cart_1'")
+    amount: int = Field(..., description="Total cart amount in UZS", gt=0)
+
 class OrderItemPublic(BaseModel):
     slipper_id: int
     quantity: int

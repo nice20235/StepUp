@@ -5,8 +5,8 @@ from app.db.database import get_db
 from app.schemas.order import (
     OrderCreate,
     OrderUpdate,
-    OrderCreatePublic,
     OrderItemCreate,
+    OrderFromCartRequest,
 )
 from app.crud.order import (
     get_orders,
@@ -27,93 +27,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.post("/")
-async def create_order_endpoint(
-    order: OrderCreatePublic,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
-    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
-    x_merge_with_latest: str | None = Header(default=None, alias="X-Merge-With-Latest"),
-):
-    """
-    Create a new order. Available to all authenticated users.
-    """
-    logger.info(f"Creating order for user: {user.name} (Admin: {user.is_admin})")
-    # Require explicit payload items; do not auto-fallback to cart here to avoid accidental merges
-    items_source: list[OrderItemCreate]
-    if getattr(order, "items", None):
-        items_source = [
-            OrderItemCreate(
-                slipper_id=it.slipper_id,
-                quantity=it.quantity,
-                unit_price=1.0,
-                notes=it.notes,
-            )
-            for it in order.items
-        ]
-    else:
-        raise HTTPException(status_code=400, detail="Order items are required")
-
-    # Set the user_id from the authenticated user
-    internal_order = OrderCreate(
-        order_id=None,
-        user_id=user.id,
-        items=items_source,
-        notes=order.notes,
-    )
-    # Opt-in merge only when explicitly requested; default is to create a fresh order
-    merge_flag = (x_merge_with_latest or "").lower() in ("1", "true", "yes")
-    try:
-        new_order = await create_order(
-            db,
-            internal_order,
-            idempotency_key=x_idempotency_key,
-            merge_fallback=merge_flag,
-        )
-    except ValueError as e:
-        # Stock or validation error -> 400
-        raise HTTPException(status_code=400, detail=str(e))
-    # No cart coupling here; totals are computed from exact items provided
-
-    
-    # Clear cache after creating order
-    from app.core.cache import invalidate_cache_pattern
-    await invalidate_cache_pattern("orders:")
-    
-    created_compact = format_tashkent_compact(new_order.created_at)
-    # IMPORTANT: Avoid accessing new_order.items directly (may trigger async lazy-load)
-    # Fetch items explicitly to prevent MissingGreenlet
-    items_result = await db.execute(
-        select(OrderItem, StepUp)
-        .join(StepUp, StepUp.id == OrderItem.slipper_id)
-        .where(OrderItem.order_id == new_order.id)
-        .order_by(OrderItem.id.asc())
-    )
-    items = items_result.all()
-    return {
-        "order_id": new_order.order_id,
-        "status": new_order.status.value if hasattr(new_order.status, 'value') else str(new_order.status),
-        "total_amount": new_order.total_amount,
-        "notes": new_order.notes,
-    # Compact local Tashkent time (YYYY-MM-DD HH:MM)
-    "created_at": created_compact,
-        "items": [
-            {
-                "slipper_id": oi.slipper_id,
-                "quantity": oi.quantity,
-                "unit_price": oi.unit_price,
-                "total_price": oi.total_price,
-                "notes": oi.notes,
-                "name": getattr(sl, "name", None),
-                "size": getattr(sl, "size", None),
-                "image": getattr(sl, "image", None),
-            }
-            for oi, sl in items
-        ],
-    }
-
 @router.post("/from-cart")
 async def create_order_from_cart(
+    payload: OrderFromCartRequest,
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
     clear_cart: bool = Query(False, description="If true, clears cart after creating the order"),
@@ -124,9 +40,26 @@ async def create_order_from_cart(
     from app.crud.cart import get_cart, get_cart_totals, clear_cart as clear_cart_fn
     from app.schemas.order import OrderCreate, OrderItemCreate
 
+    # Basic validation of client-provided amount
+    if payload.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
     cart = await get_cart(db, user.id)
     if not cart or not cart.items:
         raise HTTPException(status_code=400, detail="Cart is empty")
+
+    # Validate that provided cart_id matches current user's cart public id
+    public_cart_id = f"cart_{cart.id}"
+    if payload.cart_id != public_cart_id:
+        raise HTTPException(status_code=400, detail="cart_id does not match current user's cart")
+
+    # Ensure client-provided amount matches server-side cart total (in UZS)
+    _, _, cart_total = await get_cart_totals(db, user.id)
+    cart_total_int = int(cart_total or 0)
+    if cart_total_int <= 0:
+        raise HTTPException(status_code=400, detail="Cart total is zero")
+    if payload.amount != cart_total_int:
+        raise HTTPException(status_code=400, detail="Amount does not match cart total")
 
     # Build items from cart lines; unit_price is determined from DB at creation time
     items_source: list[OrderItemCreate] = [
@@ -154,14 +87,12 @@ async def create_order_from_cart(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-    # Align total to cart total for consistency
-    _, _, cart_total = await get_cart_totals(db, user.id)
-    if cart_total and abs((new_order.total_amount or 0.0) - cart_total) > 0.5:
-        new_order.total_amount = float(cart_total)
-        db.add(new_order)
-        await db.commit()
-        await db.refresh(new_order)
+    # At this point, cart_total has already been checked against payload.amount,
+    # so we can safely trust it for total_amount.
+    new_order.total_amount = float(cart_total_int)
+    db.add(new_order)
+    await db.commit()
+    await db.refresh(new_order)
 
     # Optionally clear cart after order creation (opt-in)
     if clear_cart:
