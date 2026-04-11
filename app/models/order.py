@@ -38,7 +38,8 @@ class Order(Base):
         nullable=False,
         index=True
     )
-    total_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    # Total order amount stored in tiyin (1 UZS = 100 tiyin)
+    total_amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     notes: Mapped[str] = mapped_column(String(500), nullable=True)
     # Idempotency key to dedupe order creation retries (per user or global)
     idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

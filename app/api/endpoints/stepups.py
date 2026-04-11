@@ -288,7 +288,7 @@ async def upload_slipper_images(
 
     for i, image in enumerate(images):
         ext = os.path.splitext(image.filename)[1]
-        if ext.lower() not in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
+        if ext.lower() not in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"]:
             raise HTTPException(status_code=400, detail=f"Invalid image format for file {image.filename}")
 
         filename = f"{uuid4().hex}{ext}"

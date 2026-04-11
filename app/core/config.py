@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Any
+from pydantic import SecretStr
+
 
 class Settings(BaseSettings):
     """Application settings.
@@ -14,10 +15,12 @@ class Settings(BaseSettings):
 
     # Database connection string. Override in production via env DATABASE_URL.
     # Example: postgresql+asyncpg://user:strong_password@db-host:5432/stepup_db
-    DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost:5432/stepup_db"
+    # NOTE: This is a non-secret placeholder. Override via env DATABASE_URL.
+    DATABASE_URL: str = "postgresql+asyncpg://dev_user:dev_password@localhost:5432/stepup_db"
 
     # JWT secret key. MUST be overridden in any non-local environment.
-    SECRET_KEY: str = "CHANGE_ME_DEVELOPMENT_SECRET_KEY"
+    # JWT secret key. Use a strong value from env SECRET_KEY in real deployments.
+    SECRET_KEY: SecretStr = SecretStr("CHANGE_ME_DEVELOPMENT_SECRET_KEY")
     ALGORITHM: str = "HS256"
     # CALLBACK_BASIC_AUTH_USERNAME and CALLBACK_BASIC_AUTH_PASSWORD removed (payment system)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
@@ -52,12 +55,15 @@ class Settings(BaseSettings):
 
     # Acquiring integration settings (safe defaults; override in .env for real creds)
     ACQUIRING_BASE_URL: str = "https://acquiring.example.com"  # Base URL of acquirer REST API
-    ACQUIRING_RPC_BASIC_USERNAME: str = "change_me_rpc_user"     # Basic Auth login for legacy /rpc endpoint
-    ACQUIRING_RPC_BASIC_PASSWORD: str = "change_me_rpc_password" # Basic Auth password for legacy /rpc endpoint
+    # Legacy /rpc Basic Auth credentials (non-secret placeholders).
+    # Real values must be provided in env: ACQUIRING_RPC_BASIC_USERNAME / ACQUIRING_RPC_BASIC_PASSWORD
+    ACQUIRING_RPC_BASIC_USERNAME: str = "dev_rpc_user"
+    ACQUIRING_RPC_BASIC_PASSWORD: SecretStr = SecretStr("dev_rpc_password")
 
     # JSON-RPC auth and external ekayring API (development placeholders)
-    RPC_USERNAME: str = "change_me_merchant_api_user"
-    RPC_PASSWORD: str = "change_me_merchant_api_password"
+    # Real credentials for /api/rpc must be set via env RPC_USERNAME / RPC_PASSWORD.
+    RPC_USERNAME: str = "dev_merchant_api_user"
+    RPC_PASSWORD: SecretStr = SecretStr("dev_merchant_api_password")
     EKAYRING_BASE_URL: str = "https://ekayring-api.example.com"
     # App runtime settings (production deploy alignment)
     APP_HOST: str = "0.0.0.0"
@@ -65,6 +71,9 @@ class Settings(BaseSettings):
     APP_WORKERS: int = 1  # only used if a process manager launches multiple workers
 
     # Order guards
-    ORDER_MAX_QTY_PER_ITEM: int = 50  # hard upper bound per order line to prevent accidental huge quantities
+    # Upper bound per order line to prevent accidental huge quantities.
+    # Increased to 1000 so that wholesale-like orders from cart (e.g. 700 pcs)
+    # are allowed by default. Can be overridden via env if needed.
+    ORDER_MAX_QTY_PER_ITEM: int = 1000
 
-settings = Settings() 
+settings = Settings()

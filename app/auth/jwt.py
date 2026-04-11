@@ -5,7 +5,8 @@ from typing import Optional, Dict, Any
 
 # Use settings from config.py instead of os.getenv to avoid caching issues
 ALGORITHM = settings.ALGORITHM
-SECRET_KEY = settings.SECRET_KEY
+# SECRET_KEY is stored as SecretStr; unwrap it for cryptographic operations.
+SECRET_KEY = settings.SECRET_KEY.get_secret_value()
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 REFRESH_TOKEN_EXPIRE_DAYS = settings.REFRESH_TOKEN_EXPIRE_DAYS
 SESSION_MAX_DAYS = settings.SESSION_MAX_DAYS

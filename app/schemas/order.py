@@ -9,7 +9,7 @@ class OrderItemBase(BaseModel):
         ..., description="Slipper ID", gt=0, example=1
     )
     quantity: int = Field(
-        ..., description="Quantity ordered", gt=0, le=100, example=2
+		..., description="Quantity ordered", gt=0, example=2
     )
     unit_price: float = Field(
         ..., description="Unit price at order time (ignored on create, taken from product)", gt=0, example=650.0
@@ -33,8 +33,7 @@ class OrderItemUpdate(BaseModel):
     quantity: Optional[int] = Field(
         None, 
         description="Quantity ordered", 
-        gt=0, 
-        le=100,
+        gt=0,
         example=2
     )
     unit_price: Optional[float] = Field(
@@ -68,7 +67,7 @@ class OrderItemResponse(OrderItemInDB):
 # -------------------- Public (API) simplified schemas --------------------
 class OrderItemCreatePublic(BaseModel):
     slipper_id: int = Field(..., description="Slipper ID", gt=0, example=1)
-    quantity: int = Field(..., description="Quantity ordered", gt=0, le=100, example=2)
+    quantity: int = Field(..., description="Quantity ordered", gt=0, example=2)
     notes: Optional[str] = Field(None, description="Item notes", max_length=255)
 
 class OrderCreatePublic(BaseModel):
@@ -87,14 +86,14 @@ class OrderFromCartRequest(BaseModel):
 
     The frontend sends:
     - cart_id: public cart identifier like "cart_1" (matches GET /cart public id)
-    - amount: total cart amount as seen on the client side (in UZS)
+    - amount: total cart amount as seen on the client side (integer, in UZS)
 
     Backend will validate that cart_id belongs to the current user and may
     compare the amount against server-side totals for additional safety.
     """
 
     cart_id: str = Field(..., description="Public cart identifier, e.g. 'cart_1'")
-    amount: int = Field(..., description="Total cart amount in UZS", gt=0)
+    amount: int = Field(..., description="Total cart amount in UZS (integer, no decimals)", gt=0)
 
 class OrderItemPublic(BaseModel):
     slipper_id: int
@@ -106,7 +105,7 @@ class OrderItemPublic(BaseModel):
 class OrderPublic(BaseModel):
     order_id: str
     status: OrderStatus
-    total_amount: float
+    total_amount: int
     notes: Optional[str]
     created_at: datetime
     items: List[OrderItemPublic]
@@ -116,7 +115,7 @@ class OrderBase(BaseModel):
     order_id: str = Field(..., description="Unique order identifier", min_length=1, max_length=32)
     user_id: int = Field(..., description="User ID", gt=0)
     status: OrderStatus = Field(default=OrderStatus.PENDING, description="Order status (PENDING|PAID|REFUNDED)")
-    total_amount: float = Field(default=0.0, description="Total order amount", ge=0)
+    total_amount: int = Field(default=0, description="Total order amount in tiyin", ge=0)
     notes: Optional[str] = Field(None, description="Order notes", max_length=500)
 
 class OrderCreate(BaseModel):
@@ -133,7 +132,7 @@ class OrderCreate(BaseModel):
 
 class OrderUpdate(BaseModel):
     status: Optional[OrderStatus] = Field(None, description="Order status")
-    total_amount: Optional[float] = Field(None, description="Total order amount", ge=0)
+    total_amount: Optional[int] = Field(None, description="Total order amount in tiyin", ge=0)
     notes: Optional[str] = Field(None, description="Order notes", max_length=500)
 
 class OrderInDB(OrderBase):

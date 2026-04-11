@@ -12,6 +12,17 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
+
+def _compute_total_tiyin_from_items(items: list[OrderItem]) -> int:
+    """Compute total amount in tiyin from a list of OrderItems.
+
+    OrderItem.total_price is stored in UZS (float). The acquiring/bank protocol
+    expects integer amounts in tiyin, so we multiply by 100 and round.
+    """
+
+    total_uzs = sum(float(it.total_price or 0.0) for it in (items or []))
+    return int(round(total_uzs * 100))
+
 async def get_order(db: AsyncSession, order_id: int, load_relationships: bool = True) -> Optional[Order]:
     """Get order by ID with optional relationship loading"""
     query = select(Order).where(Order.id == order_id)
@@ -129,9 +140,6 @@ async def create_order(
                 raise ValueError(f"StepUp with ID {item_data.slipper_id} not found")
             # Enforce stock limit against existing quantity in merge target
             incoming_qty = int(item_data.quantity)
-            from app.core.config import settings
-            if incoming_qty > settings.ORDER_MAX_QTY_PER_ITEM:
-                incoming_qty = settings.ORDER_MAX_QTY_PER_ITEM
             already = existing_by_slipper.get(item_data.slipper_id).quantity if item_data.slipper_id in existing_by_slipper else 0
             if already + incoming_qty > (slipper.quantity or 0):
                 raise ValueError(
@@ -155,9 +163,10 @@ async def create_order(
                 )
                 db.add(oi)
                 new_items_total += oi.total_price
-        # Recalculate total_amount (sum of all items)
-        current_total = sum((it.total_price or 0.0) for it in (merge_target.items or []))
-        merge_target.total_amount = current_total + new_items_total
+        # Recalculate total_amount in tiyin (sum of item totals in UZS * 100)
+        current_total_uzs = sum((it.total_price or 0.0) for it in (merge_target.items or []))
+        merged_total_uzs = current_total_uzs + new_items_total
+        merge_target.total_amount = int(round(merged_total_uzs * 100))
         db.add(merge_target)
         await db.commit()
         await db.refresh(merge_target)
@@ -166,7 +175,7 @@ async def create_order(
             select(Order).options(selectinload(Order.items)).where(Order.id == merge_target.id)
         )
         merge_obj = reloaded.scalar_one()
-        merge_obj.total_amount = sum((it.total_price or 0.0) for it in (merge_obj.items or []))
+        merge_obj.total_amount = _compute_total_tiyin_from_items(merge_obj.items or [])
         db.add(merge_obj)
         await db.commit()
         await db.refresh(merge_obj)
@@ -181,13 +190,10 @@ async def create_order(
         )
         return result.scalar_one()
     # First pass: aggregate requested quantities and validate against stock
-    from app.core.config import settings
     requested: dict[int, int] = {}
     item_ids: list[int] = []
     for it in order.items:
         q = int(it.quantity)
-        if q > settings.ORDER_MAX_QTY_PER_ITEM:
-            q = settings.ORDER_MAX_QTY_PER_ITEM
         requested[it.slipper_id] = requested.get(it.slipper_id, 0) + q
         if it.slipper_id not in item_ids:
             item_ids.append(it.slipper_id)
@@ -205,8 +211,8 @@ async def create_order(
                     f"Requested quantity exceeds available stock for item {sid} (requested={qty}, available={available})"
                 )
 
-    # Calculate total amount
-    total_amount = 0.0
+    # Calculate total amount in tiyin (1 UZS = 100 tiyin)
+    total_amount_tiyin = 0
     order_items = []
     
     for item_data in order.items:
@@ -215,16 +221,16 @@ async def create_order(
         slipper = slipper_result.scalar_one_or_none()
         if not slipper:
             raise ValueError(f"StepUp with ID {item_data.slipper_id} not found")
-        # Clamp unrealistic quantities and rely on earlier stock validation
+        # Quantity is only limited by actual stock (validated earlier)
         qty = int(item_data.quantity)
-        if qty > settings.ORDER_MAX_QTY_PER_ITEM:
-            qty = settings.ORDER_MAX_QTY_PER_ITEM
-        
-        # Use current slipper price
-        unit_price = slipper.price
-        total_price = unit_price * qty
-        total_amount += total_price
-        
+
+        # Use current slipper price in UZS
+        unit_price = slipper.price  # in UZS
+        total_price = unit_price * qty  # in UZS
+        # Accumulate total in tiyin to satisfy bank requirements
+        price_tiyin = int(round(unit_price * 100))
+        total_amount_tiyin += price_tiyin * qty
+
         # Create order item (use slipper_id)
         # Consolidate by slipper_id within this creation batch
         existing = next((oi for oi in order_items if oi.slipper_id == item_data.slipper_id), None)
@@ -248,12 +254,14 @@ async def create_order(
     provided_order_id = order.order_id
     temp_placeholder = None
     if not provided_order_id:
-        # Use a unique temp value to satisfy unique constraint at INSERT time
-        temp_placeholder = f"tmp-{uuid.uuid4().hex}"
+        # Use a unique temp value to satisfy unique constraint at INSERT time,
+        # but keep it well within the VARCHAR(32) limit of the column.
+        # uuid4().hex -> 32 chars; we take only 16 and prefix with 'tmp-' (4+16=20).
+        temp_placeholder = f"tmp-{uuid.uuid4().hex[:16]}"
     db_order = Order(
         order_id=provided_order_id if provided_order_id else temp_placeholder,
         user_id=order.user_id,
-        total_amount=total_amount,
+        total_amount=total_amount_tiyin,
         notes=order.notes,
         status=OrderStatus.PENDING,
         idempotency_key=idempotency_key
@@ -290,15 +298,16 @@ async def create_order(
     await db.commit()
     await db.refresh(db_order)
 
-    # Recompute total_amount from DB to ensure perfect accuracy
+    # Recompute total_amount from DB to ensure perfect accuracy (still in tiyin)
     recompute_result = await db.execute(
         select(func.coalesce(func.sum(OrderItem.total_price), 0.0)).where(
             OrderItem.order_id == db_order.id
         )
     )
-    exact_total = float(recompute_result.scalar() or 0.0)
-    if abs((db_order.total_amount or 0.0) - exact_total) > 1e-6:
-        db_order.total_amount = exact_total
+    exact_total_uzs = float(recompute_result.scalar() or 0.0)
+    exact_total_tiyin = int(round(exact_total_uzs * 100))
+    if (db_order.total_amount or 0) != exact_total_tiyin:
+        db_order.total_amount = exact_total_tiyin
         db.add(db_order)
         await db.commit()
         await db.refresh(db_order)

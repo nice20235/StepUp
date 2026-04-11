@@ -18,7 +18,11 @@ def verify_basic_auth(credentials: HTTPBasicCredentials = Depends(security)) -> 
     """
 
     expected_username = settings.RPC_USERNAME
-    expected_password = settings.RPC_PASSWORD
+    # RPC_PASSWORD is stored as SecretStr; unwrap before comparison.
+    try:
+        expected_password = settings.RPC_PASSWORD.get_secret_value()
+    except AttributeError:
+        expected_password = str(settings.RPC_PASSWORD)
 
     if credentials.username != expected_username or credentials.password != expected_password:
         # RFC-compliant 401 with WWW-Authenticate header

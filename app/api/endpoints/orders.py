@@ -32,15 +32,19 @@ async def create_order_from_cart(
     payload: OrderFromCartRequest,
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
-    clear_cart: bool = Query(False, description="If true, clears cart after creating the order"),
 ):
     """Create a new order from the current user's cart items.
-    If `clear_cart=true` is provided, the user's cart will be emptied after order creation.
+
+    Cart behaviour:
+    - Cart contents persist in the database indefinitely by default.
+    - After a **successful** order creation from this cart, the backend
+      automatically clears the cart for this user so items are not duplicated
+      on the next order.
     """
     from app.crud.cart import get_cart, get_cart_totals, clear_cart as clear_cart_fn
     from app.schemas.order import OrderCreate, OrderItemCreate
 
-    # Basic validation of client-provided amount
+    # Basic validation of client-provided amount (integer UZS)
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
 
@@ -53,12 +57,24 @@ async def create_order_from_cart(
     if payload.cart_id != public_cart_id:
         raise HTTPException(status_code=400, detail="cart_id does not match current user's cart")
 
-    # Ensure client-provided amount matches server-side cart total (in UZS)
-    _, _, cart_total = await get_cart_totals(db, user.id)
-    cart_total_int = int(cart_total or 0)
-    if cart_total_int <= 0:
+    # Ensure client-provided amount matches server-side cart total (in UZS).
+    # For public API we work in integer UZS, same as GET /cart (CartPublicResponse.total_amount).
+    # Here we recompute the total from the loaded cart items using int(slipper.price),
+    # which is exactly what _serialize_public uses for GET /cart.
+    total_amount_uzs = 0
+    for ci in cart.items:
+        slipper = getattr(ci, "slipper", None)
+        if not slipper:
+            # If for some reason the product is not loaded, skip it to avoid inconsistent totals
+            continue
+        price_uzs = int(slipper.price)
+        total_amount_uzs += price_uzs * ci.quantity
+
+    if total_amount_uzs <= 0:
         raise HTTPException(status_code=400, detail="Cart total is zero")
-    if payload.amount != cart_total_int:
+
+    client_amount_int = int(payload.amount)
+    if client_amount_int != int(total_amount_uzs):
         raise HTTPException(status_code=400, detail="Amount does not match cart total")
 
     # Build items from cart lines; unit_price is determined from DB at creation time
@@ -87,19 +103,9 @@ async def create_order_from_cart(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    # At this point, cart_total has already been checked against payload.amount,
-    # so we can safely trust it for total_amount.
-    new_order.total_amount = float(cart_total_int)
-    db.add(new_order)
-    await db.commit()
-    await db.refresh(new_order)
-
-    # Optionally clear cart after order creation (opt-in)
-    if clear_cart:
-        try:
-            await clear_cart_fn(db, user.id)
-        except Exception as e:
-            logger.warning("Failed to clear cart after order creation: %s", e)
+    # At this point, cart total (in integer UZS) has already been checked
+    # against payload.amount. The actual order.total_amount is computed and
+    # stored in tiyin (UZS * 100) inside create_order, so we don't override it here.
 
     # Invalidate caches
     from app.core.cache import invalidate_cache_pattern
@@ -115,9 +121,10 @@ async def create_order_from_cart(
     )
     items = items_result.all()
     return {
-        "order_id": new_order.order_id,
+        # Public order identifier, similar to cart_1 pattern
+        "order_id": f"order_{new_order.id}",
         "status": new_order.status.value if hasattr(new_order.status, 'value') else str(new_order.status),
-        "total_amount": new_order.total_amount,
+    "total_amount": int(new_order.total_amount or 0),
         "notes": new_order.notes,
         "created_at": created_compact,
         "items": [
@@ -185,12 +192,12 @@ async def list_orders(
 
         return [
             {
-                "id": order.id,
-                "order_id": order.order_id,
+                # Public order identifier in the same style as cart_1
+                "order_id": f"order_{order.id}",
                 "user_id": order.user_id,
                 "user_name": (f"{users_by_id[order.user_id][0]} {users_by_id[order.user_id][1]}".strip() if order.user_id in users_by_id else None),
                 "status": order.status.value,
-                "total_amount": order.total_amount,
+                "total_amount": int(order.total_amount or 0),
                 "created_at": format_tashkent_compact(order.created_at),
                 "updated_at": format_tashkent_compact(order.updated_at),
                 "items": items_by_order.get(order.id, []),
@@ -241,11 +248,11 @@ async def get_order_endpoint(
         ]
 
         return {
-            "id": db_order.id,
-            "order_id": db_order.order_id,
+            # Public order identifier in the same style as cart_1
+            "order_id": f"order_{db_order.id}",
             "user_id": db_order.user_id,
             "status": db_order.status.value if hasattr(db_order.status, 'value') else str(db_order.status),
-            "total_amount": db_order.total_amount,
+            "total_amount": int(db_order.total_amount or 0),
             "notes": db_order.notes,
             "created_at": format_tashkent_compact(db_order.created_at),
             "updated_at": format_tashkent_compact(db_order.updated_at),
@@ -306,11 +313,11 @@ async def update_order_endpoint(order_id: int, order_update: OrderUpdate, db: As
     ]
 
     return {
-        "id": updated_order.id,
-        "order_id": updated_order.order_id,
+        # Public order identifier in the same style as cart_1
+        "order_id": f"order_{updated_order.id}",
         "user_id": updated_order.user_id,
         "status": updated_order.status.value if hasattr(updated_order.status, 'value') else str(updated_order.status),
-        "total_amount": updated_order.total_amount,
+        "total_amount": int(updated_order.total_amount or 0),
         "notes": updated_order.notes,
         "created_at": format_tashkent_compact(updated_order.created_at),
         "updated_at": format_tashkent_compact(updated_order.updated_at),

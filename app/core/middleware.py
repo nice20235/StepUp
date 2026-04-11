@@ -110,7 +110,11 @@ class BasicAuthRPCMiddleware(BaseHTTPMiddleware):
     def __init__(self, app):
         super().__init__(app)
         self._username = settings.ACQUIRING_RPC_BASIC_USERNAME
-        self._password = settings.ACQUIRING_RPC_BASIC_PASSWORD
+        # ACQUIRING_RPC_BASIC_PASSWORD may be SecretStr; unwrap it for comparison.
+        try:
+            self._password = settings.ACQUIRING_RPC_BASIC_PASSWORD.get_secret_value()
+        except AttributeError:
+            self._password = str(settings.ACQUIRING_RPC_BASIC_PASSWORD)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Apply Basic Auth protection only for the /rpc endpoint

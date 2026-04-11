@@ -96,10 +96,15 @@ def _serialize_public(cart) -> CartPublicResponse:
 
     return CartPublicResponse(status="success", data=data)
 
-@router.get("", response_model=CartOut)
+@router.get("", response_model=CartPublicResponse)
 async def get_my_cart(user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Get the current user's cart in public format.
+
+    Returns the same structure as POST /cart/items so that frontend
+    always works with a stable public contract (cart_id like "cart_1").
+    """
     cart = await get_or_create_cart(db, user.id)
-    return _serialize(cart)
+    return _serialize_public(cart)
 
 @router.get("/total", response_model=CartTotalOut)
 async def get_my_cart_total(user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
