@@ -75,7 +75,7 @@ def _serialize_stepup(stepup, *, images: Optional[List[dict]] = None) -> dict:
 
 
 @router.get("/")
-@cached(ttl=300, key_prefix="stepups")
+@cached(ttl=900, key_prefix="stepups")
 async def read_slippers(
     skip: int = Query(0, ge=0, description="Skip items for pagination"),
     limit: int = Query(20, ge=1, le=100, description="Limit items per page"),
@@ -116,7 +116,7 @@ async def read_slippers(
 
 
 @router.get("/{slipper_id}")
-@cached(ttl=600, key_prefix="stepup")
+@cached(ttl=900, key_prefix="stepup")
 async def read_slipper(
     slipper_id: int,
     include_images: bool = Query(False, description="Include stepup images"),

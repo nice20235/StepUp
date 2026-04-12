@@ -20,6 +20,7 @@ from app.models.order import OrderItem
 from app.models.stepup import StepUp
 from app.core.timezone import to_tashkent, format_tashkent_compact
 from app.auth.dependencies import get_current_user, get_current_admin
+from app.core.cache import cached
 import logging
 
 # Set up logging
@@ -143,6 +144,7 @@ async def create_order_from_cart(
     }
 
 @router.get("/")
+@cached(ttl=60, key_prefix="orders")
 async def list_orders(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
@@ -209,6 +211,7 @@ async def list_orders(
         raise HTTPException(status_code=500, detail="Error fetching orders")
 
 @router.get("/{order_id}")
+@cached(ttl=60, key_prefix="order")
 async def get_order_endpoint(
     order_id: int, 
     db: AsyncSession = Depends(get_db), 

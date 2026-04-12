@@ -5,6 +5,7 @@ from sqlalchemy import func, and_
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.stepup import StepUp
 from app.schemas.order import OrderCreate, OrderUpdate, OrderItemCreate
+from app.core.cache import invalidate_cache_pattern
 from typing import Optional, List, Tuple
 import logging
 from datetime import datetime, timedelta
@@ -351,6 +352,9 @@ async def update_order_status(db: AsyncSession, order_id: int, status: OrderStat
     db.add(order)
     await db.commit()
     await db.refresh(order)
+    # Invalidate relevant caches so list/get endpoints see fresh data
+    await invalidate_cache_pattern("orders:")
+    await invalidate_cache_pattern(f"order:{order_id}:")
     
     # Load relationships
     result = await db.execute(

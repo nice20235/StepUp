@@ -114,29 +114,27 @@ async def clear_cart(db: AsyncSession, user_id: int) -> Cart:
 
 
 async def get_cart_totals(db: AsyncSession, user_id: int) -> tuple[int, int, float]:
-    """Efficiently compute totals for a user's cart via SQL aggregation.
-    Returns: (total_items, total_quantity, total_amount)
-    total_items = number of distinct cart lines
-    total_quantity = sum of quantities across lines
-    total_amount = sum(slipper.price * quantity) across lines
-    """
-    # Subquery: cart for user
-    cart_q = await db.execute(select(Cart.id).where(Cart.user_id == user_id))
-    cart_id = cart_q.scalar_one_or_none()
-    if cart_id is None:
-        return 0, 0, 0.0
+    """Compute totals for a user's cart via a single SQL aggregation.
 
+    Returns: (total_items, total_quantity, total_amount)
+    - total_items    = number of distinct cart lines
+    - total_quantity = sum of quantities across lines
+    - total_amount   = sum(slipper.price * quantity) across lines (in UZS)
+    """
+    # Single query: join Cart -> CartItem -> StepUp by user_id
     q = (
         select(
-            func.count(CartItem.id),
+            func.coalesce(func.count(CartItem.id), 0),
             func.coalesce(func.sum(CartItem.quantity), 0),
-            func.coalesce(func.sum((StepUp.price * CartItem.quantity)), 0.0),
+            func.coalesce(func.sum(StepUp.price * CartItem.quantity), 0.0),
         )
+        .join(CartItem, CartItem.cart_id == Cart.id)
         .join(StepUp, StepUp.id == CartItem.slipper_id)
-        .where(CartItem.cart_id == cart_id)
+        .where(Cart.user_id == user_id)
     )
     res = await db.execute(q)
     total_items, total_quantity, total_amount = res.first() or (0, 0, 0.0)
+
     # Ensure Python types
     total_items = int(total_items or 0)
     total_quantity = int(total_quantity or 0)

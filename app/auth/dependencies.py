@@ -5,6 +5,7 @@ from app.db.database import get_db
 from app.auth.jwt import decode_access_token
 from app.models.user import User
 from app.crud.user import get_user
+from app.core.cache import cache
 import logging
 
 # Set up logging
@@ -54,11 +55,23 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
                 )
         
         user_id: int = int(payload["sub"])
+
+        # Try to read user from in-memory cache first to avoid a DB query
+        cache_key = f"user:{user_id}"
+        cached_user = await cache.get(cache_key)
+        if cached_user is not None:
+            logger.info(f"User authenticated from cache: id={user_id}")
+            return cached_user
+
+        # Fallback to database lookup and populate cache
         user = await get_user(db, user_id)
         
         if user is None:
             logger.warning(f"User not found: {user_id}")
             raise credentials_exception
+
+        # Cache the user object for subsequent requests within a short TTL
+        await cache.set(cache_key, user)
         
         logger.info(f"User authenticated successfully: {user.name} (ID: {user.id})")
         return user

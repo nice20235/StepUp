@@ -65,12 +65,14 @@ async def get_slippers(
     sort: str = "name_asc"
 ) -> Tuple[List[StepUp], int]:
     """Get stepups with pagination and filters - optimized"""
-    query = select(StepUp).options(joinedload(StepUp.category))
+    # Build base query and a lightweight count query separately so that the
+    # COUNT(*) does not include ORDER BY or eager-loading overhead.
+    base_query = select(StepUp)
     conditions = []
-    
+
     if category_id:
         conditions.append(StepUp.category_id == category_id)
-    
+
     if search:
         conditions.append(
             or_(
@@ -78,10 +80,13 @@ async def get_slippers(
                 StepUp.size.ilike(f"%{search}%")
             )
         )
-    
+
     if conditions:
-        query = query.where(and_(*conditions))
-    
+        base_query = base_query.where(and_(*conditions))
+
+    # Data query: eager-load category and apply sorting + pagination
+    query = base_query.options(joinedload(StepUp.category))
+
     sort_map = {
         "id_asc": StepUp.id.asc(),
         "id_desc": StepUp.id.desc(),
@@ -94,10 +99,13 @@ async def get_slippers(
     }
     order_clause = sort_map.get(sort, StepUp.name.asc())
     query = query.order_by(order_clause)
-    
-    count_query = select(func.count()).select_from(query.subquery())
+
+    # More efficient COUNT(*) without ORDER BY or JOINs
+    count_query = select(func.count(StepUp.id))
+    if conditions:
+        count_query = count_query.where(and_(*conditions))
     count_result = await db.execute(count_query)
-    total = count_result.scalar() or 0
+    total = int(count_result.scalar() or 0)
 
     data_result = await db.execute(query.offset(skip).limit(limit))
     items = data_result.scalars().all()
