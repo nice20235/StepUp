@@ -73,7 +73,8 @@ class RpcHandler:
 
         # account must contain either phone or at least order id
         phone = account.get("phone")
-        order = account.get("order")
+        # Accept both "order" and legacy/alternative key "order_id" for compatibility
+        order = account.get("order") or account.get("order_id")
         if not (phone or order):
             return None, {"code": ERROR_INVALID_ACCOUNT, "message": "Invalid account"}
 
@@ -281,7 +282,8 @@ class RpcHandler:
         """
 
         account = tx.account_data or {}
-        order = account.get("order")
+        # Accept both "order" and "order_id" for compatibility with different client payloads
+        order = account.get("order") or account.get("order_id")
         if not order:
             return
 

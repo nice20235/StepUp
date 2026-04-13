@@ -15,7 +15,9 @@ class JsonRpcRequest(BaseModel):
     jsonrpc: Literal["2.0"] = "2.0"
     method: str
     params: dict[str, Any] = Field(default_factory=dict)
-    id: int | str | None
+    # id is optional; when omitted, we treat it as a notification-style call
+    # and will echo back null in the response id field.
+    id: int | str | None = None
 
 
 class JsonRpcResponse(BaseModel):
