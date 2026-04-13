@@ -29,7 +29,7 @@ from app.core.middleware import (
     BasicAuthRPCMiddleware,
 )
 from app.core.cache import cache
-from app.db.database import init_db, close_db
+from app.db.database import init_db, close_db, AsyncSessionLocal
 from app.api.endpoints import users, stepups, orders, categories
 from app.api import rpc as rpc_api
 from app.api.endpoints import cart as cart_router
@@ -48,6 +48,31 @@ logger = logging.getLogger(__name__)
 
 START_TIME = time.time()
 
+
+async def warm_up_cache() -> None:
+    """Warm up critical cache entries (e.g., product catalog) on startup.
+
+    This makes the first user request to the catalog fast, since the
+    `/stepups` list endpoint is already cached in memory.
+    """
+
+    try:
+        async with AsyncSessionLocal() as db:
+            # Preload the most common catalog view: first page, default sort,
+            # no filters. This goes through the @cached wrapper on
+            # `read_slippers`, so the result is stored in the in-memory cache.
+            await stepups.read_slippers(
+                skip=0,
+                limit=20,
+                category_id=None,
+                search=None,
+                sort="id_desc",
+                db=db,
+            )
+        logger.info("✅ Warmed up product catalog cache (stepups)")
+    except Exception as e:  # pragma: no cover - best-effort startup optimization
+        logger.warning(f"Cache warmup failed: {e}")
+
 # Application lifespan manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -65,7 +90,7 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Cache initialized")
         
         # Warm up critical cache entries if needed
-        # await warm_up_cache()
+        await warm_up_cache()
         
         logger.info("✅ Application started successfully!")
         
