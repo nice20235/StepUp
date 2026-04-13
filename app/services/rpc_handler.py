@@ -78,7 +78,7 @@ class RpcHandler:
         if not (phone or order):
             return None, {"code": ERROR_INVALID_ACCOUNT, "message": "Invalid account"}
 
-        # If order is provided, validate that the amount matches order.total_amount
+        # If order is provided, validate it and the amount against the order in DB.
         # We accept public ids like "order_1" as well as raw numeric ids/strings.
         if order:
             order_db_id: Optional[int] = None
@@ -100,14 +100,32 @@ class RpcHandler:
                 result = await self.db.execute(select(Order).where(Order.id == order_db_id))
                 db_order = result.scalar_one_or_none()
                 if not db_order:
-                    return None, {"code": ERROR_INVALID_ACCOUNT, "message": "Order not found"}
+                    # Заказ не найден — явно запрещаем выполнение платежа
+                    return {"allow": False, "error": "Order not found"}, None
 
-                # Order totals in our system are stored as integer UZS amounts (possibly as float in DB),
-                # while the acquiring protocol expects integer minor units. Compare as ints.
+                # Проверка статуса заказа перед проверкой суммы
+                status_raw = getattr(db_order, "status", None)
+                if isinstance(status_raw, OrderStatus):
+                    status_name = status_raw.value
+                else:
+                    status_name = str(status_raw or "")
+                status_upper = status_name.upper()
+
+                if status_upper == "PAID":
+                    # Заказ уже оплачен
+                    return {"allow": False, "error": "Order already paid"}, None
+
+                # Обрабатываем возможные промежуточные статусы как "оплата в процессе"
+                if status_upper in {"PROCESSING", "CONFIRMED", "PREPARING", "READY", "DELIVERED"}:
+                    return {"allow": False, "error": "Payment already in progress"}, None
+
+                # Order totals in our system are stored as integer minor units (tiyin).
+                # The acquiring protocol also sends integer tiyin, so compare as ints.
                 order_total_int = int(db_order.total_amount or 0)
                 if amount != order_total_int:
                     return None, {"code": ERROR_INVALID_REQUEST, "message": "Invalid amount"}
 
+        # Если все проверки прошли — позволяем выполнить транзакцию
         return {"allow": True}, None
 
     async def _create_transaction(self, params: Dict[str, Any]) -> Tuple[Dict[str, Any], None] | Tuple[None, Dict[str, Any]]:
