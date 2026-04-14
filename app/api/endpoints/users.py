@@ -228,8 +228,14 @@ async def update_own_profile(
             if existing and existing.id != current_user.id:
                 raise HTTPException(status_code=400, detail="Phone number already in use")
 
+    # Reload the persisted user from the current DB session before updating,
+    # because `current_user` is a detached value object, not an ORM instance.
+    db_user = await get_user(db, current_user.id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
     try:
-        updated_user = await update_user(db, current_user, sanitized_update)
+        updated_user = await update_user(db, db_user, sanitized_update)
     except IntegrityError as ie:
         await db.rollback()
         msg = str(getattr(ie, 'orig', ie))
