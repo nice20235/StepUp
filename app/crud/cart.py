@@ -128,6 +128,7 @@ async def get_cart_totals(db: AsyncSession, user_id: int) -> tuple[int, int, flo
             func.coalesce(func.sum(CartItem.quantity), 0),
             func.coalesce(func.sum(StepUp.price * CartItem.quantity), 0.0),
         )
+        .select_from(Cart)
         .join(CartItem, CartItem.cart_id == Cart.id)
         .join(StepUp, StepUp.id == CartItem.slipper_id)
         .where(Cart.user_id == user_id)
