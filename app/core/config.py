@@ -55,6 +55,9 @@ class Settings(BaseSettings):
 
     # Acquiring integration settings (safe defaults; override in .env for real creds)
     ACQUIRING_BASE_URL: str = "https://acquiring.example.com"  # Base URL of acquirer REST API
+    # New payment redirect configuration (read from .env)
+    PARTNER_ID: str | None = None
+    PAYMENT_BASE_URL: str | None = None
     # Legacy /rpc Basic Auth credentials (non-secret placeholders).
     # Real values must be provided in env: ACQUIRING_RPC_BASIC_USERNAME / ACQUIRING_RPC_BASIC_PASSWORD
     ACQUIRING_RPC_BASIC_USERNAME: str = "dev_rpc_user"

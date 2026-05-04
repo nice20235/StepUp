@@ -138,5 +138,21 @@ class AcquiringClient:
         frontend flow can be wired and tested end-to-end.
         """
 
-        # Example: https://bank.example.com/pay?order_id=123&amount=10000
-        return f"{self.base_url}/pay?order_id={order_id}&amount={amount}"
+        # Build canonical payment URL using environment-provided values.
+        # Format:
+        # https://pay.apexbank.uz/merchant?clientId={PARTNER_ID}&order_id={order_id}&amount={amount}&currency=UZS
+
+        partner = getattr(settings, "PARTNER_ID", None) or None
+        payment_base = getattr(settings, "PAYMENT_BASE_URL", None) or None
+
+        if not payment_base:
+            # Fallback to the configured acquiring base if PAYMENT_BASE_URL not provided
+            payment_base = self.base_url
+
+        # Ensure no trailing slash
+        payment_base = payment_base.rstrip("/")
+
+        client_id = partner or ""
+
+        # Amount is expected to be integer (tiyin) by the caller
+        return f"{payment_base}?clientId={client_id}&order_id={order_id}&amount={amount}&currency=UZS"
