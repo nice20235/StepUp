@@ -58,25 +58,25 @@ async def create_order_from_cart(
     if payload.cart_id != public_cart_id:
         raise HTTPException(status_code=400, detail="cart_id does not match current user's cart")
 
-    # Ensure client-provided amount matches server-side cart total (in UZS).
-    # For public API we work in integer UZS, same as GET /cart (CartPublicResponse.total_amount).
-    # Here we recompute the total from the loaded cart items using int(slipper.price),
-    # which is exactly what _serialize_public uses for GET /cart.
-    total_amount_uzs = 0
-    for ci in cart.items:
-        slipper = getattr(ci, "slipper", None)
-        if not slipper:
-            # If for some reason the product is not loaded, skip it to avoid inconsistent totals
-            continue
-        price_uzs = int(slipper.price)
-        total_amount_uzs += price_uzs * ci.quantity
+    # Use authoritative aggregated totals from DB to avoid float/truncation or lazy-load
+    # inconsistencies. get_cart_totals returns (total_items, total_quantity, total_amount)
+    # where total_amount is in UZS (float). The public API expects integer UZS.
+    total_items, total_quantity, total_amount = await get_cart_totals(db, user.id)
 
-    if total_amount_uzs <= 0:
+    # Defensive checks
+    if total_items <= 0 or total_quantity <= 0 or total_amount <= 0:
         raise HTTPException(status_code=400, detail="Cart total is zero")
 
+    # Normalize server total to integer UZS using rounding to avoid tiny FP drift
+    server_total_uzs = int(round(float(total_amount)))
     client_amount_int = int(payload.amount)
-    if client_amount_int != int(total_amount_uzs):
-        raise HTTPException(status_code=400, detail="Amount does not match cart total")
+
+    if client_amount_int != server_total_uzs:
+        # Give more helpful feedback including both values for easier debugging
+        raise HTTPException(
+            status_code=400,
+            detail=f"Amount does not match cart total (client={client_amount_int}, server={server_total_uzs})",
+        )
 
     # Build items from cart lines; unit_price is determined from DB at creation time
     items_source: list[OrderItemCreate] = [
