@@ -354,7 +354,11 @@ async def update_order_status(db: AsyncSession, order_id: int, status: OrderStat
     await db.refresh(order)
     # Invalidate relevant caches so list/get endpoints see fresh data
     await invalidate_cache_pattern("orders:")
-    await invalidate_cache_pattern(f"order:{order_id}:")
+    # Invalidate any cached single-order entries. Cached keys use the
+    # prefix 'order' followed by the function name and argument string
+    # (e.g. 'order:get_order_endpoint:a0=123'), so clearing by the
+    # 'order:' prefix reliably removes those entries.
+    await invalidate_cache_pattern("order:")
     
     # Load relationships
     result = await db.execute(
