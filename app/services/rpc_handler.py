@@ -319,14 +319,34 @@ class RpcHandler:
             order_db_id = int(order)
 
         if order_db_id is None:
-            return
+            # Fallback: try to find an order whose public `order_id` string
+            # matches the provided account value (covers cases where the
+            # client sent '25' or 'order_25' or a custom merchant id).
+            try:
+                if isinstance(order, (str, int)):
+                    from app.models.order import Order as _Order
+                    res = await self.db.execute(select(_Order).where(_Order.order_id == str(order)).limit(1))
+                    found = res.scalar_one_or_none()
+                    if found:
+                        order_db_id = int(found.id)
+                        self._logger.info("Fallback matched order by order_id string: %s -> db id %s", order, order_db_id)
+            except Exception as exc:  # pragma: no cover - defensive
+                self._logger.warning("Fallback order lookup failed for %s: %s", order, exc)
+
+            if order_db_id is None:
+                self._logger.warning("No order id resolved from transaction account data: %s (tx=%s)", account, getattr(tx, 'id', None))
+                return
 
         # Update order status to PAID
         from app.crud.cart import clear_cart  # local import to avoid cycles
 
+        self._logger.info("Attempting to mark order %s as PAID (tx=%s)", order_db_id, getattr(tx, 'id', None))
         updated_order = await update_order_status(self.db, order_id=order_db_id, status=OrderStatus.PAID)
         if not updated_order:
+            # If update failed, log for investigation
+            self._logger.warning("Failed to update order status to PAID for order id %s (tx=%s)", order_db_id, getattr(tx, 'id', None))
             return
+        self._logger.info("Order %s marked as PAID (tx=%s)", updated_order.id, getattr(tx, 'id', None))
 
         # After successful payment, clear the user's cart so they start fresh
         try:
