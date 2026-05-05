@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, Integer
 from sqlalchemy.orm import selectinload
 from app.models.cart import Cart, CartItem
 from app.models.stepup import StepUp
@@ -122,11 +122,17 @@ async def get_cart_totals(db: AsyncSession, user_id: int) -> tuple[int, int, flo
     - total_amount   = sum(slipper.price * quantity) across lines (in UZS)
     """
     # Single query: join Cart -> CartItem -> StepUp by user_id
+    # Note: the public cart view casts slipper.price to int (UZS) before
+    # computing subtotals. To ensure the authoritative server total exactly
+    # matches what the frontend sees (and therefore the amount the client
+    # sends when creating an order), replicate that behaviour here by
+    # truncating/casting price to INTEGER (UZS) in the aggregation.
     q = (
         select(
             func.coalesce(func.count(CartItem.id), 0),
             func.coalesce(func.sum(CartItem.quantity), 0),
-            func.coalesce(func.sum(StepUp.price * CartItem.quantity), 0.0),
+            # cast price to integer UZS to mirror _serialize_public logic
+            func.coalesce(func.sum(func.cast(StepUp.price, Integer) * CartItem.quantity), 0.0),
         )
         .select_from(Cart)
         .join(CartItem, CartItem.cart_id == Cart.id)
